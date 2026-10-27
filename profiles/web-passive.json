@@ -1,0 +1,11 @@
+{
+  "id": "web-passive",
+  "version": 1,
+  "title": "Web pasiva",
+  "description": "Inspección de respuestas HTTP/TLS sin fuzzing ni explotación. No envía formularios ni credenciales.",
+  "targetKinds": ["url"],
+  "engines": ["http-passive", "tls-check", "cookies-review"],
+  "destructive": false,
+  "requiresLab": false,
+  "limits": { "maxRequests": 60, "maxRedirects": 3, "timeoutMs": 300000, "concurrency": 2 }
+}

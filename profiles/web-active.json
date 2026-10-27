@@ -1,0 +1,12 @@
+{
+  "id": "web-active",
+  "version": 1,
+  "title": "Web activa controlada",
+  "description": "Pruebas dinámicas seleccionadas contra objetivo autorizado, con límites estrictos. Nunca POST/PUT/PATCH/DELETE en producción.",
+  "targetKinds": ["url"],
+  "engines": ["http-passive", "tls-check", "cookies-review", "zap-baseline", "nuclei-selected"],
+  "destructive": false,
+  "requiresLab": false,
+  "allowMutatingMethods": false,
+  "limits": { "maxRequests": 2000, "maxRedirects": 3, "timeoutMs": 1800000, "concurrency": 4 }
+}

@@ -1,0 +1,81 @@
+{
+  "engine": "cuyocode-patterns",
+  "version": 1,
+  "rules": [
+    {
+      "id": "vue-v-html",
+      "version": 1,
+      "title": "v-html con posible contenido no confiable",
+      "category": "xss",
+      "severity": "medium",
+      "confidence": "low",
+      "files": ["*.vue"],
+      "pattern": "v-html\\s*=",
+      "evidence": "Directiva v-html.",
+      "impact": "XSS si el valor incluye datos del servidor/usuario sin sanitizar.",
+      "remediation": ["Evitar v-html; si es necesario, DOMPurify.sanitize."],
+      "references": ["https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"],
+      "falsePositives": "Contenido 100% estático interno es seguro."
+    },
+    {
+      "id": "vue-token-storage",
+      "version": 1,
+      "title": "Token guardado en localStorage/sessionStorage",
+      "category": "session-management",
+      "severity": "medium",
+      "confidence": "medium",
+      "files": ["*.vue", "*.js", "*.ts"],
+      "pattern": "(localStorage|sessionStorage)\\s*\\.setItem\\s*\\([^)]*(token|jwt|auth)",
+      "evidence": "Token persistido en almacenamiento web.",
+      "impact": "XSS roba el token directamente; sin mitigación HttpOnly posible.",
+      "remediation": ["Cookies HttpOnly+Secure+SameSite vía backend; access token en memoria con refresh rotativo."],
+      "references": ["https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html"],
+      "falsePositives": "Datos no sensibles (preferencias UI) son aceptables."
+    },
+    {
+      "id": "vue-env-leak",
+      "version": 1,
+      "title": "Variable de entorno expuesta al bundle",
+      "category": "secrets",
+      "severity": "medium",
+      "confidence": "medium",
+      "files": ["*.vue", "*.js", "*.ts"],
+      "pattern": "import\\.meta\\.env\\.(VITE_[A-Z_]*KEY|VITE_[A-Z_]*SECRET|VITE_[A-Z_]*TOKEN)",
+      "evidence": "VITE_* con nombre sensible leída en frontend.",
+      "impact": "Todo VITE_* se incluye en el bundle público.",
+      "remediation": ["Secretos solo en backend; al frontend solo claves públicas documentadas."],
+      "references": ["https://vite.dev/guide/env-and-mode.html"],
+      "falsePositives": "Claves públicas (maps, analytics) son uso legítimo."
+    },
+    {
+      "id": "vue-postmessage-wildcard",
+      "version": 1,
+      "title": "postMessage con origen '*'",
+      "category": "xss",
+      "severity": "medium",
+      "confidence": "high",
+      "files": ["*.vue", "*.js", "*.ts"],
+      "pattern": "postMessage\\s*\\([^,]+,\\s*['\"]\\*['\"]",
+      "evidence": "postMessage con targetOrigin '*'.",
+      "impact": "Cualquier origen recibe el mensaje, incluidos datos sensibles.",
+      "remediation": ["Origen exacto + validación de event.origin en el receptor."],
+      "references": ["https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html"],
+      "falsePositives": "Pocos; casi siempre debe restringirse."
+    },
+    {
+      "id": "vue-http-url",
+      "version": 1,
+      "title": "API por HTTP sin TLS",
+      "category": "crypto",
+      "severity": "medium",
+      "confidence": "medium",
+      "files": ["*.vue", "*.js", "*.ts"],
+      "pattern": "['\"]http://(?!localhost|127\\.0\\.0\\.1)[^'\"]+['\"]",
+      "evidence": "URL http:// no local en el frontend.",
+      "impact": "Tráfico (incluidas credenciales) legible en red.",
+      "remediation": ["HTTPS en todos los entornos salvo loopback de desarrollo."],
+      "references": ["https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Protection_Cheat_Sheet.html"],
+      "falsePositives": "Excepciones documentadas detrás de túneles que terminan TLS."
+    }
+  ]
+}

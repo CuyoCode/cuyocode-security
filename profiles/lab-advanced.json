@@ -1,0 +1,12 @@
+{
+  "id": "lab-advanced",
+  "version": 1,
+  "title": "Laboratorio avanzado",
+  "description": "Pruebas profundas solo contra objetivos del laboratorio aislado verificado (Docker o laboratorio Node con IDs node-...). Bloqueado si el aislamiento no se verifica.",
+  "targetKinds": ["url", "server"],
+  "engines": ["http-passive", "tls-check", "cookies-review", "zap-full", "nuclei-selected", "ports-tcp"],
+  "destructive": true,
+  "requiresLab": true,
+  "allowMutatingMethods": true,
+  "limits": { "maxRequests": 10000, "maxRedirects": 3, "timeoutMs": 3600000, "concurrency": 6 }
+}

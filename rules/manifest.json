@@ -1,0 +1,4 @@
+{
+  "files": ["rules/javascript.json", "rules/nestjs.json", "rules/vue.json"],
+  "notes": "Conjuntos versionados del motor cuyocode-patterns. Cada regla declara severidad, confianza, falsos positivos frecuentes y referencias. La IA no sustituye estas comprobaciones deterministas."
+}

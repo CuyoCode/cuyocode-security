@@ -1,0 +1,47 @@
+{
+  "name": "cuyocode-security",
+  "version": "0.2.1",
+  "private": true,
+  "description": "CuyoCode Security — herramienta desktop de auditoría de seguridad asistida (uso interno, pruebas solo autorizadas)",
+  "license": "UNLICENSED",
+  "author": "CuyoCode",
+  "engines": {
+    "node": "^24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "main": "dist-electron/electron/main/main.js",
+  "scripts": {
+    "dev": "concurrently -k -n RENDERER,MAIN,PRELOAD,ELECTRON -c blue,green,yellow,magenta \"npm:dev:renderer\" \"npm:dev:main\" \"npm:dev:preload\" \"npm:dev:electron\"",
+    "dev:renderer": "vite",
+    "dev:main": "tsc -p tsconfig.main.build.json --watch",
+    "dev:preload": "node scripts/build-preload.js --watch",
+    "dev:electron": "wait-on tcp:5173 dist-electron/electron/main/main.js dist-electron/electron/preload/preload.js && node scripts/launch-electron.js",
+    "build": "npm run build:renderer && npm run build:main && npm run build:preload",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.main.build.json",
+    "build:preload": "node scripts/build-preload.js",
+    "type-check": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && vue-tsc -p tsconfig.renderer.json --noEmit",
+    "preview": "vite preview",
+    "electron:build": "npm run build && electron-builder --config build/electron-builder.yml",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "pinia": "^3.0.3",
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.11",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^2.2.12",
+    "wait-on": "^8.0.3"
+  }
+}

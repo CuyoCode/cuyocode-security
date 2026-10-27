@@ -1,0 +1,11 @@
+{
+  "id": "local-code",
+  "version": 1,
+  "title": "Código local (estático)",
+  "description": "Auditoría estática de un repositorio local. No ejecuta el código del objetivo ni requiere red ni IA.",
+  "targetKinds": ["folder"],
+  "engines": ["recon", "secrets-builtin", "deps-npm-audit", "patterns-builtin"],
+  "destructive": false,
+  "requiresLab": false,
+  "limits": { "maxFiles": 20000, "maxFileBytes": 1048576, "timeoutMs": 600000 }
+}

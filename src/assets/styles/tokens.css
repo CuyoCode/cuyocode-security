@@ -1,0 +1,17 @@
+:root {
+  --bg: #10151d;
+  --bg-soft: #161d27;
+  --bg-panel: #1b2330;
+  --border: #2a3444;
+  --text: #d7dee8;
+  --text-dim: #8b96a5;
+  --accent: #4f8ff7;
+  --accent-dim: #2c5cab;
+  --ok: #3fb96c;
+  --warn: #d9a13b;
+  --danger: #e05d5d;
+  --info: #58b6d9;
+  --radius: 6px;
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Cascadia Code", Consolas, monospace;
+}
