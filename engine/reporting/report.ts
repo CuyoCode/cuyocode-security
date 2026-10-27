@@ -6,7 +6,7 @@ import type { Finding } from '../../shared/finding-schema';
 import { redact, redactCode } from '../finding/redact';
 import { getAudit, getAuditNotes, listFindings } from '../../electron/main/database/audit-store';
 
-export const REPORT_GENERATOR = 'cuyocode-security/0.2.1';
+export const REPORT_GENERATOR = 'cuyocode-security/0.2.3';
 
 export interface ReportSummary {
   total: number;

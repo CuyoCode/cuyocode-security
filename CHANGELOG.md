@@ -1,6 +1,13 @@
 # Changelog
 
-## [0.2.2] — Selector de carpetas + guía de instalación
+## [0.2.3] — Bóveda cifrada, PDF e icono
+
+- Bóveda `vault.json` cifrada con DPAPI (`safeStorage`): la API key externa
+  se recuerda entre sesiones solo con consentimiento; `Olvidar` la borra.
+- Exportar PDF real (`printToPDF`, verificado 32 KB en runtime).
+- Icono propio generado sin dependencias + conectado al instalador;
+  `docs/SIGNING.md` con procedimiento de firma (instalador aún sin firmar).
+- 69 pruebas verdes.
 
 - Botón **Examinar…** con diálogo nativo en Nueva auditoría y Proyectos
   (canal `system:pick-folder`; el renderer nunca recibe rutas arbitrarias).

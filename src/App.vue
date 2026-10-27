@@ -17,7 +17,7 @@
         <router-link to="/tools">Herramientas</router-link>
         <router-link to="/settings">Ajustes</router-link>
       </nav>
-      <div class="side-foot">v0.2.1</div>
+      <div class="side-foot">v0.2.3</div>
     </aside>
     <main class="content">
       <router-view />

@@ -1,6 +1,6 @@
 {
   "name": "cuyocode-security",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "private": true,
   "description": "CuyoCode Security — herramienta desktop de auditoría de seguridad asistida (uso interno, pruebas solo autorizadas)",
   "license": "UNLICENSED",
