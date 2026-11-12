@@ -11,6 +11,7 @@ export const SYSTEM_CHANNELS = {
   clearHistory: 'system:clear-history',
   pickFolder: 'system:pick-folder',
   openInstallPage: 'system:open-install-page',
+  demo: 'system:demo',
 } as const;
 
 export type SystemChannel = (typeof SYSTEM_CHANNELS)[keyof typeof SYSTEM_CHANNELS];

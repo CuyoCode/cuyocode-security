@@ -9,23 +9,14 @@ import { ValidationError, assertSafeObject, cleanText, newId, validateId } from 
 import { assertTargetForProfile, loadProfile, runAudit } from '../../../engine/orchestrator/runner';
 import type { AuditRequest, EngineFn } from '../../../engine/orchestrator/types';
 import {
-  createAudit, finishAudit, getAudit, listAudits, saveFindings, setAuditNotes, updateAuditProgress,
+  createAudit, finishAudit, getAudit, listAudits, saveFindings, setAuditConsent, setAuditNotes,
+  updateAuditProgress, updateFindingStatus,
 } from '../database/audit-store';
 import { getSshProfile } from '../database/ssh-store';
-import { reconEngine } from '../../../engine/static/recon';
-import { secretsEngine } from '../../../engine/static/secrets';
-import { depsEngine } from '../../../engine/static/deps';
-import { patternsEngine } from '../../../engine/static/patterns';
-import { gitleaksEngine } from '../../../engine/static/adapters/gitleaks';
-import { semgrepEngine } from '../../../engine/static/adapters/semgrep';
-import { trivyEngine } from '../../../engine/static/adapters/trivy';
-import { httpEngine } from '../../../engine/dynamic/http';
-import { tlsEngine } from '../../../engine/dynamic/tls';
-import { cookiesEngine } from '../../../engine/dynamic/cookies';
-import { nucleiEngine } from '../../../engine/dynamic/adapters/nuclei';
-import { zapBaselineEngine, zapFullEngine } from '../../../engine/dynamic/adapters/zap';
-import { portsEngine } from '../../../engine/server/ports';
-import { nmapEngine } from '../../../engine/server/adapters/nmap';
+import { insertProject, listProjects } from '../database/projects-store';
+import { createNodeLab, listNodeLabs } from '../../../engine/lab/node-manager';
+import { findRepoRoot } from '../../../engine/paths';
+import { BASE_ENGINES } from '../../../engine/orchestrator/registry';
 import { sshAuditEngine } from '../../../engine/server/linux';
 import { assertLabIsolation, assertNodeLabIsolation } from '../../../engine/lab/verify';
 import { buildReport, renderHtml, renderJson } from '../../../engine/reporting/report';
@@ -34,31 +25,14 @@ import { buildReviewRequest, readExcerpt } from '../../../engine/ai/consent';
 import { OllamaProvider } from '../../../engine/ai/ollama';
 import { ExternalProvider, validateExternalConfig } from '../../../engine/ai/external';
 import type { AiAnalysis } from '../../../engine/ai/providers';
+import { redact, redactCode } from '../../../engine/finding/redact';
 import { logger } from '../logging/logger';
 import { Vault, electronStorage } from '../security/vault';
 import type { StartAuditInput } from '../../../shared/ipc-contracts/audit.contracts';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const BASE_ENGINES: Record<string, EngineFn> = {
-  'recon': reconEngine,
-  'secrets-builtin': secretsEngine,
-  'deps-npm-audit': depsEngine,
-  'patterns-builtin': patternsEngine,
-  'gitleaks': gitleaksEngine,
-  'semgrep': semgrepEngine,
-  'trivy': trivyEngine,
-  'http-passive': httpEngine,
-  'tls-check': tlsEngine,
-  'cookies-review': cookiesEngine,
-  'zap-baseline': zapBaselineEngine,
-  'zap-full': zapFullEngine,
-  'nuclei-selected': nucleiEngine,
-  'ports-tcp': portsEngine,
-  'nmap': nmapEngine,
-};
-
-const PROFILE_IDS = ['local-code', 'web-passive', 'web-active', 'server-readonly', 'lab-advanced'];
+const PROFILE_IDS = ['local-code', 'local-code-deep', 'demo-code', 'web-passive', 'web-active', 'server-readonly', 'lab-advanced'];
 
 interface AiSession {
   mode: 'off' | 'local' | 'external';
@@ -149,10 +123,15 @@ function validateStartInput(input: unknown): StartAuditInput {
       throw new ValidationError('AI_CONSENT', 'El análisis externo exige consentimiento explícito');
     }
     const c = input['aiConsent'] as Record<string, unknown>;
-    if (typeof c['provider'] !== 'string' || typeof c['model'] !== 'string' || typeof c['scope'] !== 'string') {
+    try {
+      aiConsent = {
+        provider: cleanText(c['provider'], 50, 'Proveedor IA'),
+        model: cleanText(c['model'], 100, 'Modelo IA'),
+        scope: cleanText(c['scope'], 2048, 'Alcance IA'),
+      };
+    } catch {
       throw new ValidationError('AI_CONSENT', 'Consentimiento incompleto');
     }
-    aiConsent = { provider: c['provider'], model: c['model'], scope: c['scope'] };
   }
   const projectId = input['projectId'];
   if (projectId !== null && projectId !== undefined) validateId(projectId);
@@ -173,20 +152,12 @@ export function activeAuditCount(): number {
   return running.size;
 }
 
-export async function startAudit(db: Db, sender: WebContents, raw: unknown): Promise<{ auditId: string }> {
-  const input = validateStartInput(raw);
-  const profile = loadProfile(input.profileId);
-  const request: AuditRequest = {
-    projectId: input.projectId,
-    target: input.target,
-    kind: input.kind,
-    profileId: input.profileId,
-    aiMode: input.aiMode,
-    aiConsent: input.aiConsent ? { ...input.aiConsent, at: new Date().toISOString() } : null,
-    allowPrivate: input.allowPrivate,
-    labId: input.labId,
-    sshProfileId: input.sshProfileId,
-  };
+async function launchAudit(
+  db: Db,
+  sender: WebContents,
+  request: AuditRequest,
+  profile: ReturnType<typeof loadProfile>,
+): Promise<string> {
   // Puerta de laboratorio ANTES de ejecutar nada.
   if (profile.requiresLab) {
     if (!request.labId) throw new ValidationError('LAB_REQUIRED', 'Este perfil exige laboratorio');
@@ -273,7 +244,147 @@ export async function startAudit(db: Db, sender: WebContents, raw: unknown): Pro
     }
   })();
 
-  return { auditId };
+  return auditId;
+}
+
+export async function startAudit(db: Db, sender: WebContents, raw: unknown): Promise<{ auditId: string }> {
+  const input = validateStartInput(raw);
+  const profile = loadProfile(input.profileId);
+  const request: AuditRequest = {
+    projectId: input.projectId,
+    target: input.target,
+    kind: input.kind,
+    profileId: input.profileId,
+    aiMode: input.aiMode,
+    aiConsent: input.aiConsent ? { ...input.aiConsent, at: new Date().toISOString() } : null,
+    allowPrivate: input.allowPrivate,
+    labId: input.labId,
+    sshProfileId: input.sshProfileId,
+  };
+  return { auditId: await launchAudit(db, sender, request, profile) };
+}
+
+export interface DemoResult {
+  projectId: string;
+  auditId: string;
+  localAuditId: string;
+  labId: string;
+  labTarget: string;
+  findings: number;
+}
+
+const DEMO_PROJECT_NAME = 'Demo — tienda vulnerable';
+const DEMO_FIXTURE = ['tests', 'fixtures', 'vuln-app'] as const;
+
+async function waitForAudit(db: Db, auditId: string, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const audit = getAudit(db, auditId);
+    if (!audit || audit.status !== 'running') return;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+}
+
+/** Deja la demo con estados de revisión variados, como una corrida real. */
+function seedDemoReviews(db: Db, auditId: string): void {
+  const findings = listFindings(db, { auditId }, 40).filter((f) => f.status === 'open');
+  const picks: Array<[string, string]> = [
+    ['reviewed', 'Revisado en la demo: hallazgo confirmado por lectura del código.'],
+    ['accepted-risk', 'Riesgo aceptado en la demo: el objetivo es sintético y no procesa datos reales.'],
+    ['false-positive', 'Falso positivo de demo: el valor coincide con un placeholder del fixture.'],
+  ];
+  for (let i = 0; i < picks.length && i < findings.length; i++) {
+    const [status, note] = picks[i] as [string, string];
+    try {
+      updateFindingStatus(db, findings[i]!.id, status, note);
+    } catch (e) {
+      logger.warn('No se pudo sembrar la revisión de demo', e);
+    }
+  }
+}
+
+/**
+ * Demo reproducible de un clic: auditoría estática sobre el fixture sintético
+ * + auditoría web pasiva contra el laboratorio Node. Sin Docker, sin IA y sin
+ * herramientas externas, para que funcione igual en cualquier máquina.
+ */
+export async function runDemo(db: Db, sender: WebContents): Promise<DemoResult> {
+  const fixture = path.join(findRepoRoot(), ...DEMO_FIXTURE);
+  if (!fs.existsSync(path.join(fixture, 'package.json'))) {
+    throw new ValidationError('DEMO_MISSING', 'No se encontró el fixture de demo en esta instalación');
+  }
+  let project = listProjects(db).find((p) => p.name === DEMO_PROJECT_NAME);
+  if (!project) {
+    project = insertProject(db, newId(), { name: DEMO_PROJECT_NAME, kind: 'folder', target: fixture });
+  }
+  const projectId = project.id;
+
+  const localRequest: AuditRequest = {
+    projectId,
+    target: fixture,
+    kind: 'folder',
+    profileId: 'demo-code',
+    aiMode: 'off',
+    aiConsent: null,
+    allowPrivate: false,
+  };
+  const localAuditId = await launchAudit(db, sender, localRequest, loadProfile('demo-code'));
+  await waitForAudit(db, localAuditId, 120000);
+  seedDemoReviews(db, localAuditId);
+
+  let labId = '';
+  let labTarget = '';
+  const existing = listNodeLabs().find((l) => l.id === 'node-demo');
+  if (existing) {
+    labId = existing.id;
+    labTarget = existing.target;
+  } else {
+    for (let port = 3117; port <= 3126 && !labTarget; port++) {
+      try {
+        const lab = await createNodeLab('node-demo', port);
+        labId = lab.id;
+        labTarget = lab.target;
+      } catch (e) {
+        if (e instanceof ValidationError && e.code === 'LAB_EXISTS') {
+          const found = listNodeLabs().find((l) => l.id === 'node-demo');
+          if (found) {
+            labId = found.id;
+            labTarget = found.target;
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  let webAuditId = '';
+  if (labTarget) {
+    const webRequest: AuditRequest = {
+      projectId,
+      target: labTarget,
+      kind: 'url',
+      profileId: 'web-passive',
+      aiMode: 'off',
+      aiConsent: null,
+      allowPrivate: true,
+      labId,
+    };
+    webAuditId = await launchAudit(db, sender, webRequest, loadProfile('web-passive'));
+    await waitForAudit(db, webAuditId, 120000);
+    seedDemoReviews(db, webAuditId);
+  }
+
+  const total = [localAuditId, webAuditId]
+    .filter(Boolean)
+    .reduce((sum, id) => sum + listFindings(db, { auditId: id }, 500).length, 0);
+  return {
+    projectId,
+    auditId: webAuditId || localAuditId,
+    localAuditId,
+    labId,
+    labTarget,
+    findings: total,
+  };
 }
 
 export function cancelAudit(auditId: string): { cancelled: boolean } {
@@ -281,6 +392,17 @@ export function cancelAudit(auditId: string): { cancelled: boolean } {
   if (!c) return { cancelled: false };
   c.abort();
   return { cancelled: true };
+}
+
+/** Cancelación de cierre: evita escrituras sobre una DB ya cerrada. */
+export function cancelAllAudits(): void {
+  for (const controller of running.values()) {
+    try {
+      controller.abort(new Error('La aplicación se está cerrando'));
+    } catch {
+      /* ya abortada */
+    }
+  }
 }
 
 async function runAiReview(db: Db, request: AuditRequest, auditId: string): Promise<string> {
@@ -299,31 +421,38 @@ async function runAiReview(db: Db, request: AuditRequest, auditId: string): Prom
         : () => null,
     );
     let analysis: AiAnalysis;
-    if (aiSession.mode === 'local') {
+    // El modo elegido en el asistente manda: nunca se usa el proveedor global
+    // si la auditoría pidió otro modo (evita enviar datos sin consentimiento).
+    if (request.aiMode === 'local') {
       const provider = new OllamaProvider(aiSession.ollamaModel);
       const t = await provider.test();
       if (!t.ok) return `IA local no disponible: ${t.detail}. Revisión omitida.`;
       consent.provider = 'ollama';
       consent.model = aiSession.ollamaModel;
+      setAuditConsent(db, auditId, consent);
       analysis = await provider.analyze(reviewReq, { timeoutMs: 180000 });
-    } else if (aiSession.mode === 'external' && aiSession.externalEndpoint && aiSession.externalModel && aiSession.key) {
+    } else if (request.aiMode === 'external') {
+      if (!aiSession.externalEndpoint || !aiSession.externalModel || !aiSession.key) {
+        return 'IA externa: no hay proveedor configurado en Ajustes. Revisión omitida.';
+      }
       const provider = new ExternalProvider(
         validateExternalConfig({ endpoint: aiSession.externalEndpoint, model: aiSession.externalModel, maxTokens: aiSession.externalMaxTokens }),
         aiSession.key,
       );
       consent.provider = 'external';
       consent.model = aiSession.externalModel;
+      setAuditConsent(db, auditId, consent);
       analysis = await provider.analyze(reviewReq, { timeoutMs: 120000 });
     } else {
-      return 'IA: sin proveedor configurado. Revisión omitida.';
+      return 'IA: revisión omitida (modo desactivado).';
     }
     db.prepare('INSERT INTO ai_analyses (id, audit_id, provider, model, summary, analysis_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
       randomUUID(),
       auditId,
       analysis.provider,
       analysis.model,
-      analysis.summary.slice(0, 4000),
-      JSON.stringify(analysis).slice(0, 20000),
+      redact(analysis.summary).slice(0, 4000),
+      redactCode(JSON.stringify(analysis)).slice(0, 20000),
       new Date().toISOString(),
     );
     const disputes = analysis.annotations.filter((a) => a.opinion === 'disputes').length;
@@ -342,9 +471,14 @@ export function getAiReview(db: Db, auditId: string): AiAnalysis[] {
   for (const r of rows) {
     try {
       const a = JSON.parse(r.analysis_json) as AiAnalysis;
-      out.push(a);
+      out.push({
+        ...a,
+        summary: redact(a.summary),
+        annotations: a.annotations.map((x) => ({ ...x, rationale: redact(x.rationale) })),
+        suggestedNextSteps: a.suggestedNextSteps.map((x) => redact(x)),
+      });
     } catch {
-      out.push({ provider: r.provider, model: r.model, summary: r.summary, annotations: [], suggestedNextSteps: [] });
+      out.push({ provider: r.provider, model: r.model, summary: redact(r.summary), annotations: [], suggestedNextSteps: [] });
     }
   }
   return out;
@@ -400,19 +534,26 @@ export function configureAi(input: unknown): { mode: string } {
   }
   if (mode === 'external') {
     const cfg = validateExternalConfig({ endpoint: o['endpoint'], model: o['model'], maxTokens: o['maxTokens'] });
-    const key = typeof o['apiKey'] === 'string' ? o['apiKey'] : '';
+    const key = typeof o['apiKey'] === 'string' ? o['apiKey'].trim() : '';
     const remember = o['remember'] !== false;
-    if (!remember && key.length < 8) {
-      // Sin recordar y sin clave en el formulario: mantener la guardada si existe.
-      if (!aiSession.key || aiSession.key.length < 8) throw new ValidationError('BAD_KEY', 'API key inválida');
-    } else if (key.length < 8 || key.length > 500) {
-      throw new ValidationError('BAD_KEY', 'API key inválida');
+    const hasNewKey = key.length >= 8 && key.length <= 500;
+    if (key.length > 0 && !hasNewKey) throw new ValidationError('BAD_KEY', 'API key inválida');
+    const endpointChanged =
+      aiSession.externalEndpoint !== null && aiSession.externalEndpoint !== cfg.endpoint;
+    if (!hasNewKey) {
+      // Sin clave nueva: solo se conserva la existente si el endpoint no cambió.
+      if (!aiSession.key || aiSession.key.length < 8) {
+        throw new ValidationError('BAD_KEY', 'Ingresá la API key para el proveedor externo');
+      }
+      if (endpointChanged) {
+        throw new ValidationError('KEY_REBIND', 'Cambió el endpoint: ingresá la API key de nuevo');
+      }
     }
     aiSession.mode = 'external';
     aiSession.externalEndpoint = cfg.endpoint;
     aiSession.externalModel = cfg.model;
     aiSession.externalMaxTokens = cfg.maxTokens;
-    if (key.length >= 8) aiSession.key = key;
+    if (hasNewKey) aiSession.key = key;
     // Persistir config (sin secretos) y clave (solo cifrada en bóveda).
     try {
       if (aiConfigFile) {
@@ -427,6 +568,8 @@ export function configureAi(input: unknown): { mode: string } {
       }
       if (remember && aiVault?.available && aiSession.key) {
         aiVault.set('ai-external-key', aiSession.key);
+      } else if (!remember) {
+        aiVault?.delete('ai-external-key');
       }
     } catch (e) {
       logger.error('No se pudo persistir la configuración IA', e);
@@ -463,9 +606,9 @@ export function forgetAi(): { forgotten: boolean } {
   return { forgotten: true };
 }
 
-export function generateReport(db: Db, auditId: string): { json: string; html: string } {
+export function generateReport(db: Db, auditId: string, version?: string): { json: string; html: string } {
   validateId(auditId);
-  const report = buildReport(db, auditId);
+  const report = buildReport(db, auditId, version);
   return { json: renderJson(report), html: renderHtml(report) };
 }
 

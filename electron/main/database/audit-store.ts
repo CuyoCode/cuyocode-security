@@ -6,6 +6,7 @@ import type { Db } from './connection';
 import type { Finding } from '../../../shared/finding-schema';
 import { validateFinding } from '../../../shared/finding-schema';
 import type { AuditRequest, AuditProfile, AuditStatus } from '../../../engine/orchestrator/types';
+import { logger } from '../logging/logger';
 
 export interface AuditRow {
   id: string;
@@ -17,6 +18,7 @@ export interface AuditRow {
   finishedAt: string | null;
   error: string | null;
   progress: { done: number; total: number; currentEngine: string };
+  notes: string[];
 }
 
 interface RawAudit {
@@ -29,6 +31,7 @@ interface RawAudit {
   finished_at: string | null;
   error: string | null;
   progress_json: string;
+  notes_json: string;
 }
 
 function toAuditRow(r: RawAudit): AuditRow {
@@ -41,6 +44,13 @@ function toAuditRow(r: RawAudit): AuditRow {
   } catch {
     /* progreso corrupto → ceros */
   }
+  let notes: string[] = [];
+  try {
+    const parsed = JSON.parse(r.notes_json) as unknown;
+    notes = Array.isArray(parsed) ? parsed.filter((n): n is string => typeof n === 'string') : [];
+  } catch {
+    notes = [];
+  }
   return {
     id: r.id,
     projectId: r.project_id,
@@ -51,6 +61,7 @@ function toAuditRow(r: RawAudit): AuditRow {
     finishedAt: r.finished_at,
     error: r.error,
     progress,
+    notes,
   };
 }
 
@@ -63,7 +74,14 @@ export function createAudit(db: Db, auditId: string, request: AuditRequest, prof
     request.projectId,
     profile.id,
     request.target,
-    JSON.stringify({ kind: request.kind, aiMode: request.aiMode, allowPrivate: request.allowPrivate }),
+    JSON.stringify({
+      kind: request.kind,
+      aiMode: request.aiMode,
+      allowPrivate: request.allowPrivate,
+      aiConsent: request.aiConsent,
+      engines: profile.engines,
+      profileVersion: profile.version,
+    }),
     new Date().toISOString(),
     JSON.stringify({ done: 0, total: profile.engines.length, currentEngine: '' }),
   );
@@ -83,6 +101,14 @@ export function finishAudit(db: Db, auditId: string, status: 'done' | 'cancelled
     error ?? null,
     auditId,
   );
+}
+
+/** Marca como fallidas las corridas que quedaron "running" por un cierre inesperado. */
+export function recoverInterruptedAudits(db: Db): number {
+  const result = db
+    .prepare("UPDATE audits SET status = 'failed', finished_at = ?, error = ? WHERE status = 'running'")
+    .run(new Date().toISOString(), 'Interrumpida por un cierre inesperado de la aplicación');
+  return Number(result.changes ?? 0);
 }
 
 export function listAudits(db: Db, limit = 50): AuditRow[] {
@@ -161,30 +187,42 @@ export function saveFindings(db: Db, auditId: string, findings: Finding[]): void
     `UPDATE findings SET title = ?, severity = ?, verification_status = ?,
       category = ?, confidence = ?, source = ?, rule_id = ?, target = ?, location_json = ?,
       evidence_json = ?, impact = ?, reproduction_json = ?, remediation_json = ?,
-      references_json = ?, last_seen = ? WHERE id = ?`,
+      references_json = ?, first_seen = CASE WHEN first_seen = '' THEN ? ELSE first_seen END,
+      last_seen = ? WHERE id = ?`,
   );
   const link = db.prepare(
     'INSERT OR IGNORE INTO audit_findings (audit_id, finding_id, seen_at) VALUES (?, ?, ?)',
   );
-  for (const f of findings) {
-    const existing = getFirst.get(f.id) as unknown as { first_seen: string } | undefined;
-    if (!existing) {
-      insert.run(
-        f.id, auditId, f.title, f.severity, f.verificationStatus, now,
-        f.category, f.confidence, f.source, f.ruleId, f.target,
-        JSON.stringify(f.location), JSON.stringify(f.evidence), f.impact,
-        JSON.stringify(f.reproduction), JSON.stringify(f.remediation),
-        JSON.stringify(f.references), f.firstSeen, now,
-      );
-    } else {
-      touch.run(
-        f.title, f.severity, f.verificationStatus, f.category, f.confidence,
-        f.source, f.ruleId, f.target, JSON.stringify(f.location), JSON.stringify(f.evidence),
-        f.impact, JSON.stringify(f.reproduction), JSON.stringify(f.remediation),
-        JSON.stringify(f.references), now, f.id,
-      );
+  db.exec('BEGIN;');
+  try {
+    for (const f of findings) {
+      const existing = getFirst.get(f.id) as unknown as { first_seen: string } | undefined;
+      if (!existing) {
+        insert.run(
+          f.id, auditId, f.title, f.severity, f.verificationStatus, now,
+          f.category, f.confidence, f.source, f.ruleId, f.target,
+          JSON.stringify(f.location), JSON.stringify(f.evidence), f.impact,
+          JSON.stringify(f.reproduction), JSON.stringify(f.remediation),
+          JSON.stringify(f.references), f.firstSeen, now,
+        );
+      } else {
+        touch.run(
+          f.title, f.severity, f.verificationStatus, f.category, f.confidence,
+          f.source, f.ruleId, f.target, JSON.stringify(f.location), JSON.stringify(f.evidence),
+          f.impact, JSON.stringify(f.reproduction), JSON.stringify(f.remediation),
+          JSON.stringify(f.references), f.firstSeen, now, f.id,
+        );
+      }
+      link.run(auditId, f.id, now);
     }
-    link.run(auditId, f.id, now);
+    db.exec('COMMIT;');
+  } catch (e) {
+    try {
+      db.exec('ROLLBACK;');
+    } catch {
+      /* rollback defensivo */
+    }
+    throw e;
   }
 }
 
@@ -221,12 +259,16 @@ export function listFindings(db: Db, filter: FindingFilter, limit = 500): Findin
   const sql = `SELECT f.* FROM ${from}${where.length > 0 ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY f.created_at DESC LIMIT ${Number(limit) || 500}`;
   const rows = db.prepare(sql).all(...(params as [])) as unknown as Record<string, unknown>[];
   const out: Finding[] = [];
+  let skipped = 0;
   for (const r of rows) {
     try {
       out.push(rowToFinding(r));
     } catch {
-      /* fila corrupta: se omite y se registra en informe, no se inventa */
+      skipped += 1;
     }
+  }
+  if (skipped > 0) {
+    logger.warn(`Se omitieron ${skipped} hallazgos con datos corruptos o incompletos`);
   }
   return out;
 }
@@ -284,6 +326,26 @@ export function findingHistory(db: Db, findingId: string): Array<{ at: string; c
     .prepare('SELECT changed_at AS at, change, note FROM finding_history WHERE finding_id = ? ORDER BY changed_at ASC')
     .all(findingId) as unknown as Array<{ at: string; change: string; note: string }>;
   return rows;
+}
+
+/** Registra el consentimiento real aplicado (proveedor/modelo/archivos) en la auditoría. */
+export function setAuditConsent(
+  db: Db,
+  auditId: string,
+  consent: { provider: string; model: string; scope: string; files: string[]; at: string },
+): void {
+  const row = db.prepare('SELECT scope_json FROM audits WHERE id = ?').get(auditId) as unknown as
+    | { scope_json: string }
+    | undefined;
+  if (!row) return;
+  let scope: Record<string, unknown> = {};
+  try {
+    scope = JSON.parse(row.scope_json) as Record<string, unknown>;
+  } catch {
+    scope = {};
+  }
+  scope['aiConsentApplied'] = consent;
+  db.prepare('UPDATE audits SET scope_json = ? WHERE id = ?').run(JSON.stringify(scope), auditId);
 }
 
 /** Notas de cobertura: errores y omisiones de motores (visibles en el informe). */

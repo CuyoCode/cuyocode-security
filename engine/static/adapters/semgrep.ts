@@ -51,7 +51,13 @@ export async function semgrepEngine(job: EngineJob): Promise<EngineResult> {
   }
 
   const args = ['scan', '--metrics=off', '--json', '--quiet', ...configs.flatMap((c) => ['--config', c]), job.target];
-  const res = await runTool('semgrep', { args, timeoutMs: 600000, maxOutputBytes: 16 * 1024 * 1024, cwd: job.target });
+  const res = await runTool('semgrep', {
+    args,
+    timeoutMs: 600000,
+    maxOutputBytes: 16 * 1024 * 1024,
+    cwd: job.target,
+    signal: job.signal,
+  });
   if (res.timedOut || res.exitCode === null) {
     errors.push({ engine: 'semgrep', message: 'semgrep no respondió (timeout o error)' });
     return { engine: 'semgrep', version: `semgrep/${version}`, findings, errors, skipped, durationMs: Date.now() - started };

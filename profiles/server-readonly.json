@@ -2,10 +2,20 @@
   "id": "server-readonly",
   "version": 1,
   "title": "Servidor solo-lectura",
-  "description": "Escaneo externo de puertos dentro del alcance + inspección interna por SSH con comandos permitidos versionados. No modifica el servidor.",
-  "targetKinds": ["server"],
-  "engines": ["ports-tcp", "tls-check", "ssh-readonly"],
+  "description": "Escaneo externo de puertos dentro del alcance + Nmap opcional + inspección interna por SSH con comandos permitidos versionados. No modifica el servidor.",
+  "targetKinds": [
+    "server"
+  ],
+  "engines": [
+    "ports-tcp",
+    "nmap",
+    "ssh-readonly"
+  ],
   "destructive": false,
   "requiresLab": false,
-  "limits": { "maxPorts": 64, "timeoutMs": 900000, "concurrency": 16 }
+  "limits": {
+    "maxPorts": 64,
+    "timeoutMs": 900000,
+    "concurrency": 16
+  }
 }

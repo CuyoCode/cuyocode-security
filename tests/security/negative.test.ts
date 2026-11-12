@@ -92,8 +92,12 @@ describe('pruebas negativas de seguridad', () => {
     expect(ok.annotations.length).toBe(1);
   });
 
-  it('config externa exige https', () => {
+  it('config externa exige https y rechaza loopback/red privada', () => {
     expect(() => validateExternalConfig({ endpoint: 'http://x/v1', model: 'm' })).toThrow(/https/);
+    expect(() => validateExternalConfig({ endpoint: 'https://localhost/v1', model: 'm' })).toThrow(/loopback|local/);
+    expect(() => validateExternalConfig({ endpoint: 'https://127.0.0.1/v1', model: 'm' })).toThrow(/privada|loopback/);
+    expect(() => validateExternalConfig({ endpoint: 'https://10.0.0.5/v1', model: 'm' })).toThrow(/privada|loopback/);
+    expect(() => validateExternalConfig({ endpoint: 'https://[::1]/v1', model: 'm' })).toThrow();
     expect(validateExternalConfig({ endpoint: 'https://x/v1', model: 'm' }).maxTokens).toBe(2000);
   });
 

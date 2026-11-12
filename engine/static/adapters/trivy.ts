@@ -45,6 +45,7 @@ export async function trivyEngine(job: EngineJob): Promise<EngineResult> {
     timeoutMs: 600000,
     maxOutputBytes: 16 * 1024 * 1024,
     cwd: job.target,
+    signal: job.signal,
   });
   if (res.timedOut || res.exitCode === null) {
     errors.push({ engine: 'trivy', message: 'trivy no respondió (timeout o error; la BD inicial requiere red)' });

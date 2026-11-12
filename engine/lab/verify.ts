@@ -36,7 +36,16 @@ export async function assertLabIsolation(labId: string, target: string): Promise
     reasons.push(`El objetivo ${url.hostname} no es el loopback publicado por el laboratorio`);
     return { ok: false, reasons };
   }
-  return { ok: true, reasons: [`Laboratorio "${labId}" verificado (${lab.image})`] };
+  const targetPort = url.port ? Number(url.port) : (url.protocol === 'https:' ? 443 : 80);
+  if (lab.ports.length === 0) {
+    reasons.push(`No se pudo verificar el puerto publicado del laboratorio "${labId}"`);
+    return { ok: false, reasons };
+  }
+  if (!lab.ports.includes(String(targetPort))) {
+    reasons.push(`El puerto ${targetPort} no está publicado por el laboratorio "${labId}" (publicados: ${lab.ports.join(', ')})`);
+    return { ok: false, reasons };
+  }
+  return { ok: true, reasons: [`Laboratorio "${labId}" verificado en el puerto ${targetPort} (${lab.image})`] };
 }
 
 /**

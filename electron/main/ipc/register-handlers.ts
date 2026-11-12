@@ -23,7 +23,7 @@ import { createNodeLab, listNodeLabs, stopNodeLab } from '../../../engine/lab/no
 import { redact } from '../../../engine/finding/redact';
 import {
   activeAuditCount, aiStatus, cancelAudit, configureAi, forgetAi, generateReport, getAiReview,
-  getAudit, listAudits, startAudit, testAi,
+  getAudit, listAudits, runDemo, startAudit, testAi,
 } from '../services/audit-service';
 import { getUserVersion, type Db } from '../database/connection';
 import { logger } from '../logging/logger';
@@ -84,7 +84,9 @@ export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void
 
   ipcMain.handle(SYSTEM_CHANNELS.dbHealth, wrap(SYSTEM_CHANNELS.dbHealth, (_e, ...args) => {
     assertNoArgs(args);
-    return { path: ctx.dbPath, userVersion: getUserVersion(ctx.db), ok: true };
+    const row = ctx.db.prepare('PRAGMA quick_check(1)').get() as unknown as { quick_check: string } | undefined;
+    const ok = row?.quick_check === 'ok';
+    return { path: ctx.dbPath, userVersion: getUserVersion(ctx.db), ok, detail: row?.quick_check ?? 'sin respuesta' };
   }));
 
   ipcMain.handle(SYSTEM_CHANNELS.dashboard, wrap(SYSTEM_CHANNELS.dashboard, (_e, ...args) => {
@@ -106,7 +108,8 @@ export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void
 
   ipcMain.handle(SYSTEM_CHANNELS.openDataDir, wrap(SYSTEM_CHANNELS.openDataDir, async (_e, ...args) => {
     assertNoArgs(args);
-    await shell.openPath(ctx.dataDir);
+    const error = await shell.openPath(ctx.dataDir);
+    if (error) throw new ValidationError('OPEN_FAILED', error.slice(0, 200));
     return { opened: true };
   }));
 
@@ -122,6 +125,11 @@ export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void
     const chosen = await dialog.showOpenDialog({ properties: ['openDirectory', 'dontAddToRecent'] });
     if (chosen.canceled || chosen.filePaths.length === 0) return { folder: null };
     return { folder: chosen.filePaths[0] as string };
+  }));
+
+  ipcMain.handle(SYSTEM_CHANNELS.demo, wrap(SYSTEM_CHANNELS.demo, async (e, ...args) => {
+    assertNoArgs(args);
+    return runDemo(ctx.db, e.sender);
   }));
 
   ipcMain.handle(SYSTEM_CHANNELS.openInstallPage, wrap(SYSTEM_CHANNELS.openInstallPage, async (_e, ...args) => {
@@ -189,7 +197,14 @@ export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void
   ipcMain.handle(AUDIT_CHANNELS.updateFinding, wrap(AUDIT_CHANNELS.updateFinding, (_e, ...args) => {
     assertSafeObject(assertSingleArg(args), 'Revisión');
     const o = assertSingleArg(args) as Record<string, unknown>;
-    updateFindingStatus(ctx.db, validateId(o['id']), cleanText(o['status'], 32, 'Estado'), typeof o['note'] === 'string' ? o['note'] : '');
+    const status = cleanText(o['status'], 32, 'Estado');
+    const allowed = ['reviewed', 'false-positive', 'resolved', 'accepted-risk', 'open'];
+    if (!allowed.includes(status)) throw new ValidationError('BAD_STATUS', 'Estado de revisión inválido');
+    const note = typeof o['note'] === 'string' ? o['note'].slice(0, 2000) : '';
+    if (status === 'false-positive' && note.trim().length < 10) {
+      throw new ValidationError('FP_NOTE_REQUIRED', 'Un falso positivo exige justificación (mínimo 10 caracteres)');
+    }
+    updateFindingStatus(ctx.db, validateId(o['id']), status, note);
     return { updated: true };
   }));
 
@@ -213,7 +228,7 @@ export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void
   ipcMain.handle(REPORT_CHANNELS.generate, wrap(REPORT_CHANNELS.generate, (_e, ...args) => {
     const raw = assertSingleArg(args);
     const id = typeof raw === 'string' ? raw : (raw as Record<string, unknown>)['auditId'];
-    return generateReport(ctx.db, validateId(id));
+    return generateReport(ctx.db, validateId(id), ctx.appVersion);
   }));
 
   ipcMain.handle(REPORT_CHANNELS.save, wrap(REPORT_CHANNELS.save, async (_e, ...args) => {
@@ -223,7 +238,7 @@ export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void
     if (format !== 'json' && format !== 'html' && format !== 'pdf') {
       throw new ValidationError('BAD_FORMAT', 'Formato: json, html o pdf');
     }
-    const { json, html } = generateReport(ctx.db, validateId(o['auditId']));
+    const { json, html } = generateReport(ctx.db, validateId(o['auditId']), ctx.appVersion);
     const defPath = `auditoria-${String(o['auditId']).slice(0, 8)}.${format}`;
     const chosen = await dialog.showSaveDialog({ defaultPath: defPath, filters: [{ name: format.toUpperCase(), extensions: [format] }] });
     if (chosen.canceled || !chosen.filePath) return { saved: false };
@@ -326,12 +341,12 @@ export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void
   }));
 
   ipcMain.handle(SSH_CHANNELS.remove, wrap(SSH_CHANNELS.remove, (_e, ...args) => {
-    deleteSshProfile(ctx.db, String(assertSingleArg(args)));
+    deleteSshProfile(ctx.db, validateId(assertSingleArg(args)));
     return { removed: true };
   }));
 
   ipcMain.handle(SSH_CHANNELS.fetchKey, wrap(SSH_CHANNELS.fetchKey, async (_e, ...args) => {
-    const p = getSshProfile(ctx.db, String(assertSingleArg(args)));
+    const p = getSshProfile(ctx.db, validateId(assertSingleArg(args)));
     if (!p) throw new ValidationError('NOT_FOUND', 'Perfil SSH inexistente');
     return { keys: await fetchHostKey(p.host, p.port) };
   }));
@@ -339,7 +354,7 @@ export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void
   ipcMain.handle(SSH_CHANNELS.pinKey, wrap(SSH_CHANNELS.pinKey, (_e, ...args) => {
     assertSafeObject(assertSingleArg(args), 'Pin');
     const o = assertSingleArg(args) as Record<string, unknown>;
-    pinHostKey(ctx.db, String(o['profileId']), strField(o, 'line', 4096, 'Clave'));
+    pinHostKey(ctx.db, validateId(o['profileId']), strField(o, 'line', 4096, 'Clave'));
     return { pinned: true };
   }));
 
@@ -347,8 +362,8 @@ export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void
     assertSafeObject(assertSingleArg(args), 'Ejecución SSH');
     const o = assertSingleArg(args) as Record<string, unknown>;
     const op = strField(o, 'op', 64, 'Operación');
-    if (!ALLOWED_OPS[op]) throw new ValidationError('FORBIDDEN_OP', 'Operación no permitida');
-    const p = getSshProfile(ctx.db, String(o['profileId']));
+    if (!Object.hasOwn(ALLOWED_OPS, op)) throw new ValidationError('FORBIDDEN_OP', 'Operación no permitida');
+    const p = getSshProfile(ctx.db, validateId(o['profileId']));
     if (!p) throw new ValidationError('NOT_FOUND', 'Perfil SSH inexistente');
     const r = await execAllowedOp(p, op, 30000);
     return { op, stdout: redact(r.stdout).slice(0, 20000), exitCode: r.exitCode, timedOut: r.timedOut };

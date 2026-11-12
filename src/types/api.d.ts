@@ -23,6 +23,7 @@ export interface AuditRowDto {
   finishedAt: string | null;
   error: string | null;
   progress: { done: number; total: number; currentEngine: string };
+  notes: string[];
 }
 
 export interface CuyoApi {
@@ -36,6 +37,14 @@ export interface CuyoApi {
     clearHistory: () => Promise<{ cleared: boolean }>;
     pickFolder: () => Promise<{ folder: string | null }>;
     openInstallPage: (url: string) => Promise<{ opened: boolean }>;
+    demo: () => Promise<{
+      projectId: string;
+      auditId: string;
+      localAuditId: string;
+      labId: string;
+      labTarget: string;
+      findings: number;
+    }>;
   };
   projects: {
     list: () => Promise<Project[]>;

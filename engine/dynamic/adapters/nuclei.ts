@@ -98,6 +98,7 @@ export async function nucleiEngine(job: EngineJob): Promise<EngineResult> {
       timeoutMs: job.limits.timeoutMs,
       maxOutputBytes: 1024 * 1024,
       cwd: tmp,
+      signal: job.signal,
     });
     if (res.timedOut || res.exitCode === null) {
       errors.push({ engine: 'nuclei-selected', message: 'nuclei no respondió dentro del límite' });

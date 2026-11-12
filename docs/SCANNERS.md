@@ -1,36 +1,37 @@
 # Escáneres y motores
 
-Motores propios (siempre disponibles, offline salvo indicación):
+Motores propios (siempre disponibles; red solo cuando se indica):
 
-| Motor | Versión | Qué hace |
-|---|---|---|
-| `cuyocode-recon/1.0` | 1 | Stack por evidencia (package.json, imports, CI, Docker) |
-| `cuyocode-secrets/1.0` | 1 | 10 patrones + entropía, sin emitir valores |
-| `cuyocode-deps/1.0` | 1 | `npm audit` real (requiere red); sin lockfile avisa |
-| `cuyocode-patterns/1.0` | 1 | `rules/*.json` (8 JS + 6 NestJS + 5 Vue) |
-| `cuyocode-http/1.0` | 1 | Cabeceras, TLS-básico, stack traces, rutas sensibles |
-| `cuyocode-tls/1.0` | 1 | Certificado, cadena, hostname, protocolo |
-| `cuyocode-cookies/1.0` | 1 | Flags por tipo de cookie |
-| `cuyocode-ports/1.0` | 1 | 24 puertos TCP + banner pasivo |
-| `cuyocode-ssh/1.0` | ops v1 | 13 inspecciones Linux solo-lectura |
+| Motor | Qué hace |
+|---|---|
+| `recon` | Stack por evidencia (package.json, imports, CI, Docker) |
+| `secrets-builtin` | 10 patrones + entropía, sin emitir valores |
+| `deps-npm-audit` | `npm audit` real (requiere red); sin lockfile avisa |
+| `patterns-builtin` | `rules/*.json` (8 JS + 6 NestJS + 5 Vue) |
+| `http-passive` | Cabeceras, CSP, framing, stack traces, rutas sensibles |
+| `tls-check` | Certificado, cadena, hostname, protocolo |
+| `cookies-review` | Flags por tipo de cookie |
+| `ports-tcp` | 24 puertos TCP + banner pasivo |
+| `ssh-readonly` | 13 inspecciones Linux solo-lectura |
 
 Adaptadores opcionales (binario real o `omitido` con motivo):
 
-| Adaptador | Estado en este entorno |
+| Adaptador | Requisito |
 |---|---|
-| Gitleaks | No instalado → omitido (parser no verificado E2E) |
-| Semgrep | No instalado y sin `rules/semgrep/` → omitido |
-| Trivy | No instalado → omitido |
-| OWASP ZAP | Sin Java/ZAP → omitido (parser JSON verificado con fixture) |
-| Nuclei | Sin binario/plantillas → omitido (parser JSONL verificado) |
-| Nmap | Licencia NPSL: externo opcional, nunca empaquetado |
+| Gitleaks | Binario `gitleaks` (perfil `local-code-deep`) |
+| Semgrep | Binario `semgrep` + `rules/semgrep/*.yaml` |
+| Trivy | Binario `trivy`; puede requerir red para la base de CVEs |
+| OWASP ZAP | Java + ZAP (perfiles `web-active`/`lab-advanced`) |
+| Nuclei | Binario + `NUCLEI_TEMPLATES` con plantillas locales |
+| Nmap | Binario `nmap`; licencia NPSL, nunca empaquetado |
 
-## Herramientas detectadas (27/10/2026, este equipo)
+## Herramientas detectadas (equipo de desarrollo)
 
-Git 2.56, Node 24.21, npm 11.19, OpenSSH 9.5. Docker, Python, Nmap,
-Gitleaks, Semgrep, Trivy, ZAP, Ollama: ausentes.
+Git, Node, npm, OpenSSH, Docker y Python disponibles según la máquina. La app
+muestra el estado real en **Herramientas** y permite copiar el comando de
+instalación; nunca instala nada por su cuenta.
 
-## Licencias (a confirmar contra fuentes oficiales antes de distribuir)
+## Licencias
 
 Gitleaks MIT, Trivy Apache-2.0, ZAP Apache-2.0, Nuclei MIT, Semgrep LGPL-2.1
 (motor; reglas mixtas), Nmap NPSL (no redistribuir), Ollama MIT,

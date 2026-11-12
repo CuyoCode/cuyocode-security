@@ -36,6 +36,7 @@ export async function gitleaksEngine(job: EngineJob): Promise<EngineResult> {
     timeoutMs: 300000,
     maxOutputBytes: 8 * 1024 * 1024,
     cwd: job.target,
+    signal: job.signal,
   });
   if (res.timedOut || res.exitCode === null) {
     errors.push({ engine: 'gitleaks', message: 'gitleaks no respondió (timeout o error de ejecución)' });

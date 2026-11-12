@@ -12,7 +12,7 @@ import { ValidationError } from '../scope/targets';
 import { validateFolderTarget, validateServerTarget, validateUrlTarget } from '../scope/targets';
 import { findRepoRoot } from '../paths';
 
-const PROFILE_IDS = ['local-code', 'web-passive', 'web-active', 'server-readonly', 'lab-advanced'] as const;
+const PROFILE_IDS = ['local-code', 'local-code-deep', 'demo-code', 'web-passive', 'web-active', 'server-readonly', 'lab-advanced'] as const;
 
 function repoRoot(): string {
   return findRepoRoot();
@@ -82,10 +82,18 @@ export async function runAudit(
     callbacks.onProgress(d, t, currentEngine);
   };
 
+  // El timeout debe cancelar de verdad: un flag no detiene motores en curso.
+  const timeoutController = new AbortController();
+  let timedOut = false;
   const timer = setTimeout(() => {
-    errors.push(`Tiempo máximo excedido (${timeoutMs} ms)`);
+    timedOut = true;
+    timeoutController.abort(new Error(`Tiempo máximo excedido (${timeoutMs} ms)`));
   }, timeoutMs);
   timer.unref?.();
+  const onExternalAbort = (): void => timeoutController.abort(signal.reason);
+  if (signal.aborted) timeoutController.abort(signal.reason);
+  else signal.addEventListener('abort', onExternalAbort, { once: true });
+  const effectiveSignal = timeoutController.signal;
 
   const job: EngineJob = {
     auditId,
@@ -93,7 +101,7 @@ export async function runAudit(
     kind: request.kind,
     profile,
     limits: profile.limits,
-    signal,
+    signal: effectiveSignal,
     allowPrivate: request.allowPrivate,
     aiMode: request.aiMode,
     report,
@@ -101,7 +109,12 @@ export async function runAudit(
 
   try {
     for (const name of profile.engines) {
-      if (signal.aborted) {
+      if (timedOut) {
+        errors.push(`Tiempo máximo excedido (${timeoutMs} ms)`);
+        callbacks.finishAudit(auditId, 'failed', errors[errors.length - 1]);
+        return { status: 'failed', errors };
+      }
+      if (effectiveSignal.aborted) {
         callbacks.finishAudit(auditId, 'cancelled', 'Cancelada por el usuario');
         return { status: 'cancelled', errors };
       }
@@ -133,17 +146,25 @@ export async function runAudit(
       done += 1;
       report(done, total, name);
     }
-    if (signal.aborted) {
+    if (timedOut) {
+      errors.push(`Tiempo máximo excedido (${timeoutMs} ms)`);
+      callbacks.finishAudit(auditId, 'failed', errors[errors.length - 1]);
+      return { status: 'failed', errors };
+    }
+    if (effectiveSignal.aborted) {
       callbacks.finishAudit(auditId, 'cancelled', 'Cancelada por el usuario');
       return { status: 'cancelled', errors };
     }
     callbacks.finishAudit(auditId, 'done');
     return { status: 'done', errors };
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'fallo desconocido';
+    const message = timedOut
+      ? `Tiempo máximo excedido (${timeoutMs} ms)`
+      : e instanceof Error ? e.message : 'fallo desconocido';
     callbacks.finishAudit(auditId, 'failed', message);
     return { status: 'failed', errors: [...errors, message] };
   } finally {
     clearTimeout(timer);
+    signal.removeEventListener('abort', onExternalAbort);
   }
 }

@@ -44,6 +44,7 @@ export interface SshExecResult {
   stdout: string;
   exitCode: number | null;
   timedOut: boolean;
+  aborted: boolean;
 }
 
 function sshBaseArgs(profile: SshProfile): string[] {
@@ -60,7 +61,12 @@ function sshBaseArgs(profile: SshProfile): string[] {
 }
 
 /** Ejecuta UNA operación permitida. Rechaza cualquier op fuera del catálogo. */
-export async function execAllowedOp(profile: SshProfile, op: string, timeoutMs = 30000): Promise<SshExecResult> {
+export async function execAllowedOp(
+  profile: SshProfile,
+  op: string,
+  timeoutMs = 30000,
+  signal?: AbortSignal,
+): Promise<SshExecResult> {
   if (!/^[A-Za-z0-9._-]{1,64}$/.test(op) || !Object.prototype.hasOwnProperty.call(ALLOWED_OPS, op)) {
     throw new Error(`Operación SSH no permitida: ${op}`);
   }
@@ -76,12 +82,21 @@ export async function execAllowedOp(profile: SshProfile, op: string, timeoutMs =
       throw new Error('Clave SSH del perfil inaccesible');
     }
   }
+  // El comando remoto es una constante de la allowlist, no input del usuario.
+  // Se pasa como un único argv para que OpenSSH lo entregue al shell remoto.
   const res = await runTool('ssh', {
-    args: [...sshBaseArgs(profile), '--', def.command],
+    args: [...sshBaseArgs(profile), def.command],
     timeoutMs,
     maxOutputBytes: 256 * 1024,
+    ...(signal ? { signal } : {}),
   });
-  return { op, stdout: res.stdout || res.stderr, exitCode: res.exitCode, timedOut: res.timedOut };
+  return {
+    op,
+    stdout: res.stdout || res.stderr,
+    exitCode: res.exitCode,
+    timedOut: res.timedOut,
+    aborted: res.aborted,
+  };
 }
 
 /** Obtiene la clave pública del servidor para alta inicial (pin manual). */

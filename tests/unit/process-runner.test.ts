@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { assertSafeArgs, runTool } from '../../engine/process/runner';
+import { ALLOWED_OPS } from '../../engine/server/ssh';
 
 describe('ejecutor de procesos', () => {
-  it('rechaza argumentos peligrosos', () => {
-    expect(() => assertSafeArgs(['a;b'])).toThrow();
+  it('rechaza NUL y saltos de línea, pero admite metacaracteres con shell:false', () => {
     expect(() => assertSafeArgs(['a\nb'])).toThrow();
+    expect(() => assertSafeArgs(['a\0b'])).toThrow();
+    expect(() => assertSafeArgs(['a;b'])).not.toThrow();
+    expect(() => assertSafeArgs(['https://x/?a=1&b=2'])).not.toThrow();
     expect(() => assertSafeArgs(['ok', '--flag=1'])).not.toThrow();
+  });
+
+  it('todas las operaciones SSH permitidas pasan la validación de argv', () => {
+    for (const [id, def] of Object.entries(ALLOWED_OPS)) {
+      expect(() => assertSafeArgs([def.command]), id).not.toThrow();
+    }
   });
 
   it('ejecuta y captura salida', async () => {

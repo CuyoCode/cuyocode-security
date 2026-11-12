@@ -45,7 +45,9 @@ export async function createLab(id: string, image: string, publishPort: number):
       '--network', network,
       '--label', `${LAB_LABEL}=${id}`,
       '--memory', '1g', '--cpus', '1.0', '--pids-limit', '256',
-      '--read-only=false',
+      '--cap-drop', 'ALL',
+      '--security-opt', 'no-new-privileges',
+      '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',
       '-p', `127.0.0.1:${publishPort}:3000`,
       image,
     ],
@@ -61,7 +63,15 @@ export async function createLab(id: string, image: string, publishPort: number):
 export async function removeLab(id: string): Promise<void> {
   if (!/^[a-z0-9-]{4,32}$/.test(id)) throw new Error('id de laboratorio inválido');
   // Solo contenedores/redes con nuestra etiqueta: jamás toca recursos ajenos.
-  await runTool('docker', { args: ['rm', '-f', `cuyosec-${id}`], timeoutMs: 60000, maxOutputBytes: 4096 });
+  const ps = await runTool('docker', {
+    args: ['ps', '-aq', '--filter', `label=${LAB_LABEL}=${id}`],
+    timeoutMs: 30000,
+    maxOutputBytes: 8192,
+  });
+  const ids = ps.stdout.split(/\s+/).filter((x) => /^[a-f0-9]{12,64}$/i.test(x));
+  if (ids.length > 0) {
+    await runTool('docker', { args: ['rm', '-f', ...ids], timeoutMs: 60000, maxOutputBytes: 4096 });
+  }
   await runTool('docker', { args: ['network', 'rm', `${LAB_NET_PREFIX}${id}`], timeoutMs: 30000, maxOutputBytes: 4096 });
 }
 
@@ -74,5 +84,10 @@ export async function labStatus(id: string): Promise<LabInfo | null> {
   const line = ps.stdout.split('\n').map((l) => l.trim()).find(Boolean);
   if (!line) return null;
   const [container = '', image = '', ...rest] = line.split(/\s+/);
-  return { id, image, container, network: `${LAB_NET_PREFIX}${id}`, status: rest.join(' '), ports: [] };
+  const meta = rest.join(' ');
+  const ports: string[] = [];
+  for (const m of meta.matchAll(/:(\d+)->\d+\/(?:tcp|udp)/g)) {
+    if (m[1]) ports.push(m[1]);
+  }
+  return { id, image, container, network: `${LAB_NET_PREFIX}${id}`, status: meta, ports };
 }

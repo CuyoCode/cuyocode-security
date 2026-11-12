@@ -6,17 +6,40 @@ directories:
 files:
   - dist/**/*
   - dist-electron/**/*
+  - "!dist-electron/**/*.map"
   - package.json
   - profiles/**/*
   - rules/**/*.json
   - engine/lab/targets/**/*
+  - tests/fixtures/**/*
 asarUnpack:
   - engine/lab/targets/**/*
+  - tests/fixtures/**/*
+artifactName: CuyoCode-Security-Setup-${version}.${ext}
+compression: maximum
+npmRebuild: false
+publish:
+  provider: github
+  owner: CuyoCode
+  repo: cuyocode-security
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 win:
-  target: nsis
+  target:
+    - target: nsis
+      arch:
+        - x64
   icon: resources/icon.ico
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  shortcutName: CuyoCode Security
+  uninstallDisplayName: CuyoCode Security
+  deleteAppDataOnUninstall: false
   installerIcon: resources/icon.ico
   uninstallerIcon: resources/icon.ico

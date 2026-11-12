@@ -40,11 +40,14 @@ describe('bóveda cifrada', () => {
     expect(() => vault.set('k', 'x'.repeat(5000))).toThrow();
   });
 
-  it('archivo corrupto equivale a bóveda vacía', () => {
+  it('archivo corrupto se pone en cuarentena y no se pierde', () => {
     const dir = tempDir();
     fs.writeFileSync(path.join(dir, 'vault.json'), 'no-json{{{', 'utf8');
     const vault = new Vault(dir, fakeStorage);
     expect(vault.get('cualquiera')).toBeNull();
+    const quarantined = fs.readdirSync(dir).filter((f) => f.includes('.corrupt-'));
+    expect(quarantined.length).toBe(1);
+    expect(fs.readFileSync(path.join(dir, quarantined[0] as string), 'utf8')).toBe('no-json{{{');
   });
 
   it('sin cifrado disponible no guarda', () => {

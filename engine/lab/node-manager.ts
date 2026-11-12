@@ -1,9 +1,8 @@
 // Gestor del laboratorio Node: ejecuta la app vulnerable propia como hija del
 // proceso principal, solo en loopback, con healthcheck y apagado garantizado.
-// Aislamiento más débil que Docker (mismo SO): solo datos sintéticos, solo
-// perfiles que lo admitan, y la puerta verifica proceso+host+puerto.
+// En Electron usa utilityProcess (no depende de RunAsNode); en tests usa node.
 
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { findRepoRoot } from '../paths';
 import { ValidationError } from '../scope/targets';
@@ -16,13 +15,41 @@ export interface NodeLabInfo {
   target: string;
 }
 
-const labs = new Map<string, { proc: ChildProcess; port: number; startedAt: string }>();
+interface LabChild {
+  pid?: number;
+  kill(): boolean;
+  on(event: 'exit', cb: () => void): void;
+  on(event: 'error', cb: () => void): void;
+}
+
+const labs = new Map<string, { proc: LabChild; port: number; startedAt: string; exited: boolean }>();
 
 function targetScript(): string {
   const abs = path.join(findRepoRoot(), 'engine', 'lab', 'targets', 'node-vuln-app.cjs');
   // Empaquetado: los targets van fuera del asar (asarUnpack).
   if (abs.includes('app.asar')) return abs.replace('app.asar', 'app.asar.unpacked');
   return abs;
+}
+
+function spawnLab(script: string, port: number): LabChild {
+  try {
+    // require diferido: en tests (Node puro) no existe utilityProcess.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const electron = require('electron') as typeof import('electron');
+    if (typeof electron.utilityProcess?.fork === 'function') {
+      return electron.utilityProcess.fork(script, [String(port)], {
+        stdio: 'ignore',
+        serviceName: 'CuyoCode Node Lab',
+      }) as unknown as LabChild;
+    }
+  } catch {
+    /* sin runtime Electron */
+  }
+  return spawn(process.execPath, [script, String(port)], {
+    shell: false,
+    windowsHide: true,
+    stdio: 'ignore',
+  }) as unknown as LabChild;
 }
 
 export function validateNodeLabId(id: string): string {
@@ -65,21 +92,17 @@ export async function createNodeLab(id: string, port: number): Promise<NodeLabIn
   const labPort = validateNodeLabPort(port);
   if (labs.has(labId)) throw new ValidationError('LAB_EXISTS', `El laboratorio "${labId}" ya existe`);
   const startedAt = new Date().toISOString();
-  const proc = spawn(process.execPath, [targetScript(), String(labPort)], {
-    shell: false,
-    windowsHide: true,
-    stdio: 'ignore',
-  });
-  let exited = false;
+  const proc = spawnLab(targetScript(), labPort);
+  const entry = { proc, port: labPort, startedAt, exited: false };
   proc.on('exit', () => {
-    exited = true;
+    entry.exited = true;
   });
   proc.on('error', () => {
-    exited = true;
+    entry.exited = true;
   });
-  labs.set(labId, { proc, port: labPort, startedAt });
+  labs.set(labId, entry);
   const healthy = await waitHealthy(labPort, 15000);
-  if (!healthy || exited) {
+  if (!healthy || entry.exited) {
     await stopNodeLab(labId);
     throw new ValidationError('LAB_PORT_BUSY', `El laboratorio "${labId}" no respondió en 127.0.0.1:${labPort} (¿puerto ocupado?)`);
   }
@@ -92,13 +115,13 @@ export async function stopNodeLab(id: string): Promise<boolean> {
   if (!entry) return false;
   labs.delete(labId);
   try {
-    entry.proc.kill('SIGTERM');
+    entry.proc.kill();
   } catch {
     /* ya terminado */
   }
   await new Promise((r) => setTimeout(r, 1500));
   try {
-    if (entry.proc.exitCode === null) entry.proc.kill('SIGKILL');
+    if (!entry.exited) entry.proc.kill();
   } catch {
     /* terminado */
   }
@@ -107,24 +130,24 @@ export async function stopNodeLab(id: string): Promise<boolean> {
 
 export function getNodeLabPort(id: string): number | null {
   const entry = labs.get(id);
-  if (!entry || entry.proc.exitCode !== null) return null;
+  if (!entry || entry.exited) return null;
   return entry.port;
 }
 
 export function listNodeLabs(): NodeLabInfo[] {
   const out: NodeLabInfo[] = [];
   for (const [id, entry] of labs) {
-    if (entry.proc.exitCode !== null) continue;
+    if (entry.exited) continue;
     out.push({ id, port: entry.port, pid: entry.proc.pid ?? null, startedAt: entry.startedAt, target: `http://127.0.0.1:${entry.port}/` });
   }
   return out;
 }
 
-/** Apagado de emergencia (before-quit). Sincrónico: envía SIGTERM a todos. */
+/** Apagado de emergencia (before-quit). Sincrónico: envía kill a todos. */
 export function stopAllNodeLabs(): void {
   for (const [id, entry] of labs) {
     try {
-      entry.proc.kill('SIGTERM');
+      entry.proc.kill();
     } catch {
       /* ya terminado */
     }

@@ -1,0 +1,28 @@
+name: Feature request
+description: Proponé una mejora
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema o necesidad
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Propuesta
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      options: [UI/UX, Motor estático, Motor dinámico, Servidores/SSH, Informes, IA, Distribución, Documentación]
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: Riesgo de seguridad
+      description: ¿Afecta alcance, permisos, redacción o ejecución de procesos?

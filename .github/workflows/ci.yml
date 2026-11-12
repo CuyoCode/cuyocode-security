@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Auditoría de dependencias de producción
+        run: npm audit --omit=dev
+      - name: Type check
+        run: npm run type-check
+      - name: Tests
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Escaneo CLI del fixture vulnerable
+        run: node dist-electron/scripts/audit-cli.js --profile local-code --target tests/fixtures/vuln-app --out artifacts/audit --fail-on critical
+      - name: Publicar informe de ejemplo
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report
+          path: artifacts/

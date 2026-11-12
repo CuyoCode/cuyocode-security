@@ -6,26 +6,28 @@ import type { Migration } from './migrations';
 
 const KEEP_BACKUPS = 3;
 
-function backupDatabase(dbPath: string): string | null {
+function backupDatabase(db: Db, dbPath: string): string {
+  const dir = path.dirname(dbPath);
+  const base = path.basename(dbPath, path.extname(dbPath));
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const dest = path.join(dir, `${base}.bak-${stamp}.sqlite`);
   try {
-    const dir = path.dirname(dbPath);
-    const base = path.basename(dbPath, path.extname(dbPath));
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const dest = path.join(dir, `${base}.bak-${stamp}.sqlite`);
-    fs.copyFileSync(dbPath, dest);
-    const backups = fs
-      .readdirSync(dir)
-      .filter((f) => f.startsWith(`${base}.bak-`))
-      .sort()
-      .reverse();
-    for (const extra of backups.slice(KEEP_BACKUPS)) {
-      fs.rmSync(path.join(dir, extra), { force: true });
-    }
-    return dest;
+    // VACUUM INTO genera una copia consistente aunque haya WAL pendiente.
+    db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
   } catch (err) {
-    logger.error('No se pudo crear el backup previo a migrar', err);
-    return null;
+    logger.warn('VACUUM INTO falló; se intenta checkpoint + copia', err);
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+    fs.copyFileSync(dbPath, dest);
   }
+  const backups = fs
+    .readdirSync(dir)
+    .filter((f) => f.startsWith(`${base}.bak-`))
+    .sort()
+    .reverse();
+  for (const extra of backups.slice(KEEP_BACKUPS)) {
+    fs.rmSync(path.join(dir, extra), { force: true });
+  }
+  return dest;
 }
 
 export function runPendingMigrations(db: Db, dbPath: string, all: Migration[]): number {
@@ -33,7 +35,8 @@ export function runPendingMigrations(db: Db, dbPath: string, all: Migration[]): 
   const pending = all.filter((m) => m.version > current).sort((a, b) => a.version - b.version);
   if (pending.length === 0) return current;
   if (databaseFileExists(dbPath)) {
-    backupDatabase(dbPath);
+    // Sin backup verificado no se migra: preferimos fallar antes que perder datos.
+    backupDatabase(db, dbPath);
   }
   for (const m of pending) {
     db.exec('BEGIN;');

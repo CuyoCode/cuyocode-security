@@ -48,7 +48,9 @@ export function assertSingleArg(args: unknown[]): unknown {
 
 export function cleanText(value: unknown, max: number, what: string): string {
   if (typeof value !== 'string') throw new ValidationError('INVALID_TYPE', `${what}: se esperaba texto`);
-  const trimmed = value.trim().replace(/\s+/g, ' ');
+  // Solo se recorta: colapsar espacios internos rompe rutas válidas
+  // (p. ej. "C:\Mi  Proyecto") y cambia el alcance real.
+  const trimmed = value.trim();
   if (trimmed.length === 0) throw new ValidationError('EMPTY', `${what}: valor vacío`);
   if (trimmed.length > max) throw new ValidationError('TOO_LONG', `${what}: máximo ${max} caracteres`);
   // eslint-disable-next-line no-control-regex
@@ -56,6 +58,11 @@ export function cleanText(value: unknown, max: number, what: string): string {
     throw new ValidationError('CONTROL_CHARS', `${what}: contiene caracteres de control`);
   }
   return trimmed;
+}
+
+/** Texto de presentación: recorta y colapsa espacios internos. */
+export function cleanLabel(value: unknown, max: number, what: string): string {
+  return cleanText(value, max, what).replace(/\s+/g, ' ');
 }
 
 const KIND_SET: ReadonlySet<string> = new Set(['folder', 'url', 'server']);
@@ -105,7 +112,7 @@ export function validateServerTarget(target: string): string {
 
 export function validateCreateProject(input: unknown): CreateProjectInput {
   assertSafeObject(input, 'Proyecto');
-  const name = cleanText(input['name'], LIMITS.nameMax, 'Nombre');
+  const name = cleanLabel(input['name'], LIMITS.nameMax, 'Nombre');
   const kindRaw = input['kind'];
   if (typeof kindRaw !== 'string' || !KIND_SET.has(kindRaw)) {
     throw new ValidationError('BAD_KIND', 'Tipo: folder, url o server');

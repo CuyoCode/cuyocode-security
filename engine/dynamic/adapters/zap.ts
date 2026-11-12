@@ -111,6 +111,7 @@ export async function zapEngine(job: EngineJob, mode: 'baseline' | 'full'): Prom
       timeoutMs: job.limits.timeoutMs,
       maxOutputBytes: 1024 * 1024,
       cwd: tmp,
+      signal: job.signal,
     });
     if (res.timedOut || res.exitCode === null) {
       errors.push({ engine: engineName, message: 'ZAP no respondió dentro del límite' });

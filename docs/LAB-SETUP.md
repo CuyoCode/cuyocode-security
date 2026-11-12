@@ -33,11 +33,13 @@ Fijar siempre versión y, cuando sea viable, digest (`image@sha256:…`).
 - Red dedicada `--internal` (sin Internet desde el objetivo) + etiqueta
   `cuyosec.lab=<id>`.
 - Publicación solo en `127.0.0.1:puerto`.
-- Límites: 1 CPU, 1 GB RAM, 256 pids.
+- Límites: 1 CPU, 1 GB RAM, 256 pids, `--cap-drop ALL`,
+  `no-new-privileges` y `/tmp` acotado.
 - Sin socket Docker, sin credenciales reales, sin bases de producción.
 
 ## Puerta de ejecución
 
-`lab:check` verifica daemon + lab en ejecución + objetivo en loopback del lab.
-`lab:remove` solo toca contenedores/redes con la etiqueta propia: jamás
-recursos preexistentes ajenos.
+`lab:check` verifica daemon + lab en ejecución + objetivo en loopback **y que
+el puerto del objetivo sea uno de los publicados por el laboratorio**. Si no se
+puede determinar el puerto, bloquea (fail-closed). `lab:remove` solo elimina
+contenedores/redes con la etiqueta propia: jamás recursos preexistentes ajenos.

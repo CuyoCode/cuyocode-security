@@ -5,7 +5,8 @@
 import type { EngineJob, EngineResult } from '../orchestrator/types';
 import type { Finding } from '../../shared/finding-schema';
 import { stableFindingId } from '../finding/dedup';
-import { ALLOWED_OPS, SSH_OPS_VERSION, execAllowedOp, type SshProfile } from './ssh';
+import { SSH_OPS_VERSION, execAllowedOp, type SshProfile } from './ssh';
+import { redact } from '../finding/redact';
 
 export const LINUX_VERSION = 'cuyocode-ssh/1.0';
 
@@ -64,12 +65,13 @@ async function runOp(
 ): Promise<string | null> {
   if (job.signal.aborted) return null;
   try {
-    const r = await execAllowedOp(ctx.profile, op, 30000);
+    const r = await execAllowedOp(ctx.profile, op, 30000, job.signal);
+    if (r.aborted) return null;
     if (r.timedOut || r.exitCode === null) {
       errors.push({ engine: 'ssh-readonly', message: `${op}: sin respuesta` });
       return null;
     }
-    return r.stdout;
+    return redact(r.stdout);
   } catch (e) {
     errors.push({ engine: 'ssh-readonly', message: `${op}: ${e instanceof Error ? e.message : '?'}` });
     return null;
@@ -85,7 +87,6 @@ export async function sshAuditEngine(
   const skipped: EngineResult['skipped'] = [];
   const errors: EngineResult['errors'] = [];
   const now = new Date().toISOString();
-  void ALLOWED_OPS;
 
   const uname = await runOp(job, ctx, 'sys.uname', errors);
   if (uname && !uname.includes('NO_')) {

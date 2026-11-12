@@ -20,7 +20,8 @@ export async function exportPdf(html: string): Promise<Buffer> {
       pageSize: 'A4',
       printBackground: true,
       landscape: false,
-      margins: { top: 12000, bottom: 12000, left: 12000, right: 12000 },
+      // Electron documenta los márgenes en pulgadas (0.5 in ≈ 1.27 cm).
+      margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 },
     });
   } finally {
     try {

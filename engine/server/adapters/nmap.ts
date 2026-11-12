@@ -63,6 +63,7 @@ export async function nmapEngine(job: EngineJob): Promise<EngineResult> {
     args: ['-sV', '-T4', '--top-ports', '50', '--open', '-oX', '-', host ?? ''],
     timeoutMs: job.limits.timeoutMs,
     maxOutputBytes: 4 * 1024 * 1024,
+    signal: job.signal,
   });
   if (res.timedOut || res.exitCode === null) {
     errors.push({ engine: 'nmap', message: 'nmap no respondió dentro del límite' });

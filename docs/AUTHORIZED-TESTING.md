@@ -4,17 +4,19 @@
 
 Solo objetivos con autorización expresa del responsable. Ante la duda, no
 escanear. Esta herramienta no elude esa responsabilidad: el asistente muestra
-el alcance exacto antes de ejecutar y registra dominios/IPs/puertos aprobados.
+el alcance exacto antes de ejecutar y el registro local conserva objetivo,
+tipo, perfil, modo de IA y autorización de red privada.
 
 ## Perfiles y límites
 
 | Perfil | Qué hace | Qué NUNCA hace |
 |---|---|---|
 | `local-code` | Lee código local (no lo ejecuta) | Ejecutar el objetivo |
-| `web-passive` | GET no mutantes (máx. 60) | Fuzzing, login, POST |
-| `web-active` | ZAP baseline + Nuclei (máx. 2000 req) | POST/PUT/DELETE en prod |
-| `server-readonly` | TCP + SSH solo-lectura | Modificar el servidor |
-| `lab-advanced` | Pruebas profundas en lab aislado | Salir del laboratorio |
+| `local-code-deep` | + adaptadores externos opcionales | Ejecutar el objetivo |
+| `web-passive` | GET no mutantes (presupuesto acotado) | Fuzzing, login, POST |
+| `web-active` | ZAP baseline + Nuclei seleccionado | POST/PUT/DELETE en prod |
+| `server-readonly` | TCP + Nmap opcional + SSH solo-lectura | Modificar el servidor |
+| `lab-advanced` | Pruebas profundas en lab aislado verificado | Salir del laboratorio |
 
 ## Prohibiciones
 
@@ -22,8 +24,9 @@ el alcance exacto antes de ejecutar y registra dominios/IPs/puertos aprobados.
 - Credenciales reales o de terceros; solo cuentas sintéticas de prueba.
 - Datos reales de usuarios/tenants en pruebas de autorización.
 - Persistencia, pivoteo, exfiltración: fuera del alcance del laboratorio.
-- UDP discovery: opcional, lento y ambiguo (no implementado en MVP).
+- UDP discovery: no implementado.
 
 ## Evidencia de autorización
 
-Cada informe incluye objetivo, perfil, fecha y límites aplicados.
+Cada informe incluye objetivo, perfil, fecha, duración, cobertura y límites
+aplicados. La demo usa exclusivamente datos sintéticos incluidos en el repo.

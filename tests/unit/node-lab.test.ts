@@ -1,4 +1,6 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { findRepoRoot } from '../../engine/paths';
 import {
   createNodeLab,
   stopNodeLab,
@@ -21,11 +23,9 @@ describe('laboratorio node (sin Docker)', () => {
 
   it('el target rechaza puerto privilegiado', async () => {
     const { runTool } = await import('../../engine/process/runner');
+    const script = path.join(findRepoRoot(), 'engine', 'lab', 'targets', 'node-vuln-app.cjs');
     const r = await runTool(process.execPath, {
-      args: [
-        'C:\\Users\\ignac\\Documents\\programacion\\cuyocode-security\\engine\\lab\\targets\\node-vuln-app.cjs',
-        '80',
-      ],
+      args: [script, '80'],
       timeoutMs: 10000,
       maxOutputBytes: 1024,
     });

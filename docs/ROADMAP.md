@@ -1,25 +1,30 @@
 # Roadmap
 
-## Completado (Fases 0–7, verificado 27/10/2026)
+## Completado
 
-Base desktop endurecida, orquestador cancelable, 9 motores propios +
-6 adaptadores, SSH solo-lectura, laboratorio con puerta de aislamiento, IA
-opcional con consentimiento, informes JSON/HTML redactados, 57 tests verdes.
+- Base desktop endurecida, orquestador cancelable y motores deterministas.
+- 9 motores propios + adaptadores opcionales (omitidos con motivo si faltan).
+- SSH solo-lectura, laboratorio con puerta de aislamiento, IA opt-in.
+- Informes JSON/HTML/PDF con resumen ejecutivo y cobertura.
+- Rediseño de UI, onboarding, demo reproducible y CLI headless.
+- 77 pruebas verdes y CI en GitHub Actions.
+- Repositorio público con licencia MIT, capturas y documentación.
 
-## Fase 8 (en curso)
+## Próximo
 
-- Inventario de dependencias y licencias (SBOM).
-- Instalador NSIS probado en Windows limpio.
-- Revisión de dependencias vulnerables propias (`npm audit` del proyecto).
-
-## Futuro (post-MVP, sin compromiso)
-
-- Importación OpenAPI para APIs (alcance guiado).
+- Firma de código del instalador (certificado).
+- Auto-update con GitHub Releases firmado.
 - Reglas Semgrep locales versionadas (`rules/semgrep/`).
-- Plantillas Nuclei curadas + `NUCLEI_TEMPLATES` documentado.
-- PDF vía `printToPDF` del informe HTML.
+- Plantillas Nuclei curadas y variable `NUCLEI_TEMPLATES` documentada en UI.
+- Pruebas E2E de UI con Playwright Electron.
+- Cobertura con umbral mínimo por módulo.
+- i18n (es/en) y tema claro.
+
+## Futuro (sin compromiso)
+
+- Importación OpenAPI para alcance guiado de APIs.
 - Aplicación de parches revisada (opt-in, diff previo, deshabilitada por defecto).
-- i18n, firma de instalador (certificado), auto-update.
-- Publicación open source: re-auditoría de secretos en historial + `SECURITY.md`.
+- Retención y purga configurable de historial.
+- Exportación/restauración de base desde la UI.
 
 Lo no listado no está prometido.

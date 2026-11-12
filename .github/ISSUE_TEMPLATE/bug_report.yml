@@ -1,0 +1,41 @@
+name: Bug report
+description: Reportá un problema reproducible
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        No incluyas secretos, datos de clientes ni vulnerabilidades explotables.
+        Para problemas de seguridad usá SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: Qué pasó
+      description: Descripción clara y pasos para reproducir.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Qué esperabas
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versión
+      placeholder: 0.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Sistema operativo
+      options: [Windows 11, Windows 10, Otro]
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs relevantes
+      description: Pegá solo líneas sin secretos ni rutas personales.

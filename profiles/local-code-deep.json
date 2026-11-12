@@ -1,0 +1,25 @@
+{
+  "id": "local-code-deep",
+  "version": 1,
+  "title": "Código local profundo",
+  "description": "Análisis estático con adaptadores opcionales (Gitleaks, Semgrep y Trivy). Si faltan binarios o reglas, se omiten con motivo visible.",
+  "targetKinds": [
+    "folder"
+  ],
+  "engines": [
+    "recon",
+    "secrets-builtin",
+    "deps-npm-audit",
+    "patterns-builtin",
+    "gitleaks",
+    "semgrep",
+    "trivy"
+  ],
+  "destructive": false,
+  "requiresLab": false,
+  "limits": {
+    "maxFiles": 20000,
+    "maxFileBytes": 1048576,
+    "timeoutMs": 1200000
+  }
+}

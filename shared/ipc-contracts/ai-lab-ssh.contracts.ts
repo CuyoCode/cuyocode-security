@@ -48,6 +48,23 @@ export const SSH_CHANNELS = {
   exec: 'ssh:exec',
 } as const;
 
+/** Catálogo visible de operaciones SSH de solo lectura (debe coincidir con engine/server/ssh). */
+export const SSH_OPS = [
+  'sys.uname',
+  'net.sockets',
+  'fw.ufw',
+  'fw.iptables',
+  'ssh.config',
+  'svc.enabled',
+  'pkg.updates',
+  'docker.ps',
+  'proxy.nginx',
+  'certs.live',
+  'perms.shadow',
+  'users.login',
+  'logs.auth',
+] as const;
+
 export interface SshProfileInput {
   name: string;
   host: string;

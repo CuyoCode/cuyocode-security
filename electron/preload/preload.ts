@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('api', {
     clearHistory: () => unwrap(ipcRenderer.invoke(SYSTEM_CHANNELS.clearHistory)),
     pickFolder: () => unwrap(ipcRenderer.invoke(SYSTEM_CHANNELS.pickFolder)),
     openInstallPage: (url: string) => unwrap(ipcRenderer.invoke(SYSTEM_CHANNELS.openInstallPage, { url })),
+    demo: () => unwrap(ipcRenderer.invoke(SYSTEM_CHANNELS.demo)),
   },
   projects: {
     list: () => unwrap(ipcRenderer.invoke(PROJECT_CHANNELS.list)),

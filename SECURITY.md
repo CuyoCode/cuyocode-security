@@ -10,22 +10,34 @@ terceros, rangos no autorizados ni producción sin permiso explícito.
 
 Si encontrás una vulnerabilidad en esta herramienta, reportala al responsable
 del proyecto por un canal privado. No la publiques hasta consensuar la
-corrección.
+corrección. No incluyas secretos reales ni datos de clientes en el reporte.
 
-## Garantías
+## Garantías de diseño
 
-- Renderer sin acceso al sistema (`nodeIntegration:false`, `sandbox:true`).
+- Renderer sin acceso al sistema (`nodeIntegration:false`, `sandbox:true`,
+  `contextIsolation:true`), navegación y ventanas bloqueadas, permisos denegados.
 - IPC validado en el proceso principal; canales fijos, sin comandos arbitrarios.
-- Procesos externos sin `shell:true`, con timeout y tope de salida.
-- Logs e informes con redacción de secretos.
-- Credenciales SSH/API en el almacén del SO (desde Fase 5); nunca en texto plano.
+- Procesos externos sin `shell:true`, con timeout, tope de salida, cancelación y
+  allowlists.
+- Logs, evidencias, IA e informes con redacción de secretos.
+- SSH solo lectura con operaciones versionadas y host key fijada.
+- Laboratorio con puerta de aislamiento; sin verificación se bloquea.
+- Electron con fuses, integridad ASAR, single instance y CSP de producción.
+- Instalador sin firma de código (pendiente de certificado).
 
-## Auto-auditoría (27/10/2026)
+## Auto-auditoría
 
-- `npm audit --omit=dev`: 0 vulnerabilidades en dependencias de producción
-  (el instalador no empaqueta `node_modules`: el renderer va compilado).
-- `npm audit` completo: 3 avisos solo-dev (esbuild anidado de Vite,
-  cadena tinypool/vitest). Dependencia directa `esbuild` actualizada a ^0.28.
-  No se aplica `audit fix --force` (cambio mayor no verificado). Riesgo
-  acotado a la máquina de desarrollo; re-evaluar al actualizar Vite/Vitest.
-- SBOM: `sbom.json` (345 paquetes, todas licencias permisivas, sin GPL).
+- `npm audit --omit=dev`: **0 vulnerabilidades** en dependencias de producción.
+  El instalador no empaqueta `node_modules`; el renderer va compilado por Vite.
+- `npm audit` completo: 6 avisos moderados en herramientas de desarrollo
+  (`electron-builder` y cadena `minimatch`), sin corrección disponible sin
+  cambio mayor. Riesgo acotado a la máquina de desarrollo.
+- 80 pruebas, incluidas seguridad negativa, redacción, migraciones, demo E2E y
+  hardening de Electron.
+
+## Verificación rápida
+
+```powershell
+npm run verify
+npm audit --omit=dev
+```

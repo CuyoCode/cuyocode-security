@@ -8,5 +8,5 @@
     "rootDir": ".",
     "outDir": "dist-electron"
   },
-  "include": ["electron/main/**/*.ts", "engine/**/*.ts", "shared/**/*.ts"]
+  "include": ["electron/main/**/*.ts", "engine/**/*.ts", "shared/**/*.ts", "scripts/audit-cli.ts"]
 }

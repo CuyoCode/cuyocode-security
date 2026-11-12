@@ -72,12 +72,27 @@ export async function depsEngine(job: EngineJob): Promise<EngineResult> {
     skipped.push({ engine: 'deps-npm-audit', reason: 'sin package-lock.json: versiones no fijadas, auditar con cautela' });
   }
 
-  const res = await runTool('npm', {
-    args: ['audit', '--json', '--no-progress'],
-    timeoutMs: 120000,
-    maxOutputBytes: 4 * 1024 * 1024,
-    cwd: job.target,
-  });
+  // En Windows npm es npm.cmd: con shell:false hay que invocar cmd.exe /c
+  // con una línea constante (sin input del objetivo).
+  const npmArgs = ['audit', '--json', '--no-progress'];
+  const res = process.platform === 'win32'
+    ? await runTool(process.env.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe', {
+        args: ['/d', '/s', '/c', `npm ${npmArgs.join(' ')}`],
+        timeoutMs: 120000,
+        maxOutputBytes: 4 * 1024 * 1024,
+        cwd: job.target,
+        signal: job.signal,
+      })
+    : await runTool('npm', {
+        args: npmArgs,
+        timeoutMs: 120000,
+        maxOutputBytes: 4 * 1024 * 1024,
+        cwd: job.target,
+        signal: job.signal,
+      });
+  if (res.aborted) {
+    return { engine: 'deps-npm-audit', version: DEPS_VERSION, findings, errors, skipped, durationMs: Date.now() - started };
+  }
   if (res.timedOut || res.exitCode === null) {
     skipped.push({ engine: 'deps-npm-audit', reason: 'npm audit no disponible (sin red o npm ausente)' });
     return { engine: 'deps-npm-audit', version: DEPS_VERSION, findings, errors, skipped, durationMs: Date.now() - started };

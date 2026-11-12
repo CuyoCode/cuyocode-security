@@ -6,6 +6,7 @@ export {
   assertNoArgs,
   assertSingleArg,
   cleanText,
+  cleanLabel,
   validateFolderTarget,
   validateUrlTarget,
   validateServerTarget,

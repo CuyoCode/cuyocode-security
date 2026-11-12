@@ -21,7 +21,7 @@ La configuración ya acepta certificado por variables de entorno
    ```
 3. Verificar la firma:
    ```powershell
-   Get-AuthenticodeSignature "release\CuyoCode Security Setup *.exe"
+   Get-AuthenticodeSignature "release\CuyoCode-Security-Setup-*.exe"
    ```
 
 ## Icono

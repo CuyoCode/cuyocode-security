@@ -1,0 +1,11 @@
+{
+  "id": "demo-code",
+  "version": 1,
+  "title": "Código local (demo, sin red)",
+  "description": "Perfil interno para la demo reproducible: análisis estático sin npm audit ni herramientas externas.",
+  "targetKinds": ["folder"],
+  "engines": ["recon", "secrets-builtin", "patterns-builtin"],
+  "destructive": false,
+  "requiresLab": false,
+  "limits": { "maxFiles": 20000, "maxFileBytes": 1048576, "timeoutMs": 600000 }
+}

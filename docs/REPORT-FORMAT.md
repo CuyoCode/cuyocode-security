@@ -1,14 +1,24 @@
 # Formato de informe
 
-Cada auditoría genera JSON estructurado + HTML legible (`reports:generate`,
-`reports:save` con diálogo). Contenido:
+Cada auditoría genera JSON estructurado + HTML legible + PDF opcional
+(`reports:generate`, `reports:save` con diálogo). Contenido:
 
-1. Objetivo, fecha/duración, perfil, alcance, motores+versiones, reglas.
-2. Tecnologías (hallazgo `recon-stack`), resumen por severidad.
-3. Confirmados vs pendientes (por `verificationStatus`, no solo severidad).
-4. Evidencias redactadas, impacto, validación, corrección, referencias.
-5. Limitaciones fijas + notas de cobertura (errores/omisiones de motores).
-6. Sin secretos, sin score global.
+1. Portada con objetivo, perfil, estado, fechas, duración y versión de la app.
+2. Resumen ejecutivo: accionables, confirmados, pendientes y conteo por severidad.
+3. Top de riesgos priorizados.
+4. Tabla de hallazgos y detalle con evidencias redactadas, impacto, validación
+   segura, corrección y referencias.
+5. Cobertura: motores planificados, motores con hallazgos y notas de
+   errores/omisiones.
+6. Limitaciones fijas. Sin secretos y sin puntuación global.
+
+## Esquema JSON
+
+- `generator`, `version`, `generatedAt`
+- `audit`: id, perfil, título, objetivo, estado, fechas, duración, error
+- `scope`, `engines`, `coverage`, `summary` (`total`, `actionable`,
+  `bySeverity`, `byStatus`, `confirmed`, `pending`)
+- `findings[]`, `notes[]`, `limitations[]`
 
 ## Esquema de hallazgo
 
@@ -21,3 +31,8 @@ justificación obligatoria para falsos positivos.
 
 `audits:compare` por ids estables: nuevos, resueltos, persistentes. La tabla
 `audit_findings` conserva la atribución histórica aunque se re-ejecute.
+
+## CLI
+
+La CLI genera los mismos JSON/HTML sin abrir Electron. Con `--fail-on` devuelve
+código 2 si hay hallazgos accionables en el umbral, para integrarlo en CI.

@@ -112,7 +112,23 @@ export const migrations: Migration[] = [
         PRIMARY KEY (audit_id, finding_id)
       );
       INSERT OR IGNORE INTO audit_findings (audit_id, finding_id, seen_at)
-        SELECT audit_id, id, COALESCE(last_seen, created_at) FROM findings WHERE audit_id IS NOT NULL;
+        SELECT audit_id, id, COALESCE(NULLIF(last_seen, ''), created_at) FROM findings WHERE audit_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 6,
+    name: 'repair-finding-dates-and-indexes',
+    sql: `
+      UPDATE findings SET first_seen = created_at WHERE first_seen = '' OR first_seen IS NULL;
+      UPDATE findings SET last_seen = COALESCE(NULLIF(last_seen, ''), first_seen, created_at) WHERE last_seen = '' OR last_seen IS NULL;
+      UPDATE audit_findings SET seen_at = COALESCE((SELECT last_seen FROM findings WHERE findings.id = audit_findings.finding_id), seen_at)
+        WHERE seen_at = '';
+      CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
+      CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
+      CREATE INDEX IF NOT EXISTS idx_findings_last_seen ON findings(last_seen);
+      CREATE INDEX IF NOT EXISTS idx_audit_findings_finding ON audit_findings(finding_id);
+      CREATE INDEX IF NOT EXISTS idx_finding_history_finding ON finding_history(finding_id);
+      CREATE INDEX IF NOT EXISTS idx_audits_started_at ON audits(started_at DESC);
     `,
   },
 ];

@@ -4,6 +4,7 @@
 
 import type { AiAnalysis, AiProvider, AiReviewRequest } from './providers';
 import { analysisPrompt, validateAnalysis } from './providers';
+import { assertScopeIps, isSensitiveIp, resolveHost } from '../scope/network';
 
 export interface ExternalConfig {
   endpoint: string;
@@ -22,12 +23,27 @@ export function validateExternalConfig(input: unknown): ExternalConfig {
     throw new Error('endpoint no URL');
   }
   if (url.protocol !== 'https:') throw new Error('el endpoint externo debe ser https');
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) {
+    throw new Error('el endpoint externo no puede ser loopback/red local');
+  }
+  // Bloquea IPs literales sensibles (loopback, privadas, metadata cloud).
+  if (/^[0-9.]+$/.test(host) || host.includes(':')) {
+    if (isSensitiveIp(host)) throw new Error('el endpoint externo no puede ser una IP privada/loopback');
+  }
   if (typeof c['model'] !== 'string' || c['model'].length === 0 || c['model'].length > 100) {
     throw new Error('modelo inválido');
   }
   const maxTokens = typeof c['maxTokens'] === 'number' ? Math.floor(c['maxTokens']) : 2000;
   if (maxTokens < 100 || maxTokens > 16000) throw new Error('maxTokens fuera de rango 100-16000');
   return { endpoint: url.toString(), model: c['model'], maxTokens };
+}
+
+/** Revalida en cada llamada que el endpoint resuelva a una IP pública. */
+async function assertPublicEndpoint(endpoint: string): Promise<void> {
+  const host = new URL(endpoint).hostname.replace(/^\[|\]$/g, '');
+  const resolved = await resolveHost(host);
+  assertScopeIps(resolved, { allowPrivate: false });
 }
 
 export class ExternalProvider implements AiProvider {
@@ -51,6 +67,7 @@ export class ExternalProvider implements AiProvider {
 
   async test(): Promise<{ ok: boolean; detail: string }> {
     try {
+      await assertPublicEndpoint(this.config.endpoint);
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 15000);
       timer.unref?.();
@@ -67,6 +84,7 @@ export class ExternalProvider implements AiProvider {
   }
 
   async analyze(request: AiReviewRequest, opts: { timeoutMs: number }): Promise<AiAnalysis> {
+    await assertPublicEndpoint(this.config.endpoint);
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs);
     timer.unref?.();

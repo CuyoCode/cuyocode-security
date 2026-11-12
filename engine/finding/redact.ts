@@ -3,24 +3,22 @@
 
 export const MAX_MSG = 4096;
 
-const SECRET_PATTERNS: RegExp[] = [
-  // key=value, key: value, "key": "value" — conserva la clave, oculta el valor.
-  /((?:password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|private[_-]?key|session[_-]?id)["']?[^\S\r\n]*[:=][^\S\r\n]*["']?)([^"'\s,}]+)(["']?)/gi,
-  // Authorization: Bearer xxx / Basic xxx
-  /((?:authorization|proxy-authorization)[^\S\r\n]*:[^\S\r\n]*(?:bearer|basic)[^\S\r\n]+)(\S+)/gi,
-  // Bloques PEM accidentales.
-  /(-----BEGIN [A-Z ]*PRIVATE KEY-----)[\s\S]{0,200}?/g,
-];
+const KEY_VALUE_RX =
+  /((?:password|passwd|pwd|secret|token|api[_-]?key|auth[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|private[_-]?key|session[_-]?id)["']?[^\S\r\n]*[:=][^\S\r\n]*["']?)([^"'\s,}]+)(["']?)/gi;
+const AUTH_HEADER_RX =
+  /((?:authorization|proxy-authorization)[^\S\r\n]*:[^\S\r\n]*(?:bearer|basic)[^\S\r\n]+)(\S+)/gi;
+const PEM_BLOCK_RX =
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+const PEM_OPEN_RX = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*/g;
 
 /** Redacta secretos de un texto libre y lo trunca a un tamaño seguro. */
 export function redact(input: string): string {
   let out = input.length > MAX_MSG ? input.slice(0, MAX_MSG) + '…[truncado]' : input;
-  for (const rx of SECRET_PATTERNS) {
-    rx.lastIndex = 0;
-    out = out.replace(rx, (_m, head: string, _secret: string, tail: string) =>
-      tail === undefined ? `${head}[REDACTED]` : `${head}[REDACTED]${tail}`,
-    );
-  }
+  out = out.replace(KEY_VALUE_RX, (_m, head: string, _secret: string, tail: string) => `${head}[REDACTED]${tail}`);
+  out = out.replace(AUTH_HEADER_RX, (_m, head: string) => `${head}[REDACTED]`);
+  out = out.replace(PEM_BLOCK_RX, '[REDACTED PRIVATE KEY]');
+  // Bloque PEM truncado o sin cierre: ocultar todo lo que sigue al BEGIN.
+  out = out.replace(PEM_OPEN_RX, '[REDACTED PRIVATE KEY]');
   return out;
 }
 

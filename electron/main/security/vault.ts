@@ -32,6 +32,19 @@ export class Vault {
     this.storage = storage;
   }
 
+  private quarantineCorrupt(): void {
+    const dest = `${this.file}.corrupt-${Date.now()}`;
+    try {
+      fs.renameSync(this.file, dest);
+    } catch {
+      try {
+        fs.copyFileSync(this.file, dest);
+      } catch {
+        /* último recurso: no hay backup disponible */
+      }
+    }
+  }
+
   private readAll(): Record<string, string> {
     try {
       const raw = fs.readFileSync(this.file, 'utf8');
@@ -45,8 +58,10 @@ export class Vault {
         }
         return out;
       }
+      this.quarantineCorrupt();
       return {};
-    } catch {
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') this.quarantineCorrupt();
       return {};
     }
   }

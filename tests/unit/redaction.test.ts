@@ -24,4 +24,20 @@ describe('redacción de secretos en logs', () => {
     expect(out.length).toBeLessThan(9000);
     expect(out).toContain('[truncado]');
   });
+
+  it('redacta bloques PEM completos sin duplicar la clave', () => {
+    const pem = '-----BEGIN RSA PRIVATE KEY-----\nMIIEsecretobody\n-----END RSA PRIVATE KEY-----';
+    const out = redact(`antes ${pem} después`);
+    expect(out).toBe('antes [REDACTED PRIVATE KEY] después');
+    expect(out).not.toContain('MIIEsecretobody');
+  });
+
+  it('redacta bloques PEM truncados', () => {
+    const out = redact('-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk');
+    expect(out).toBe('[REDACTED PRIVATE KEY]');
+  });
+
+  it('no deja offsets numéricos en Authorization', () => {
+    expect(redact('authorization: Bearer abc123')).toBe('authorization: Bearer [REDACTED]');
+  });
 });
