@@ -7,6 +7,8 @@ release/
 Thumbs.db
 .env
 !.env.example
+!tests/fixtures/**/.env
 probe/
 .tmp/
 coverage/
+artifacts/
