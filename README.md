@@ -10,7 +10,6 @@ sin promesas de "seguridad garantizada".
 
 [![CI](https://github.com/CuyoCode/cuyocode-security/actions/workflows/ci.yml/badge.svg)](https://github.com/CuyoCode/cuyocode-security/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-5b9dff.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-80%20passing-45c97a.svg)](#pruebas)
 [![Node](https://img.shields.io/badge/node-24-45c97a.svg)](https://nodejs.org/)
 [![Electron](https://img.shields.io/badge/electron-45-5b9dff.svg)](https://www.electronjs.org/)
 

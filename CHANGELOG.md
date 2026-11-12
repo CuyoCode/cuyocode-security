@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+- **Repo público:** fixture de demo `.env` versionado (CI reproducible), actions
+  actualizadas a v7, escaneo de secretos y push protection activos, reporte
+  privado de vulnerabilidades habilitado y `main` protegido con PR + check `verify`.
+- **Instalador:** el workflow de release acepta firma de código opcional vía
+  secretos `CSC_LINK` y `CSC_KEY_PASSWORD`; sin certificado sigue compilando sin
+  firmar.
+- **Docs:** badge estático de tests reemplazado por el estado real de CI.
+
 ## [0.3.0] — Presentación profesional, demo y CLI
 
 - **Rediseño visual completo:** sidebar agrupada, topbar con breadcrumb, design
