@@ -8,9 +8,11 @@ terceros, rangos no autorizados ni producción sin permiso explícito.
 
 ## Reporte de vulnerabilidades propias
 
-Si encontrás una vulnerabilidad en esta herramienta, reportala al responsable
-del proyecto por un canal privado. No la publiques hasta consensuar la
-corrección. No incluyas secretos reales ni datos de clientes en el reporte.
+Si encontrás una vulnerabilidad en esta herramienta, reportala por un canal
+privado: usá **Security > Report a vulnerability** en
+[GitHub](https://github.com/CuyoCode/cuyocode-security/security/advisories/new).
+No la publiques hasta consensuar la corrección. No incluyas secretos reales ni
+datos de clientes en el reporte.
 
 ## Garantías de diseño
 
